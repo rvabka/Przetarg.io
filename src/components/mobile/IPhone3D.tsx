@@ -1,7 +1,7 @@
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
 interface IPhone3DProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function IPhone3D({ children }: IPhone3DProps) {
@@ -27,5 +27,5 @@ export function IPhone3D({ children }: IPhone3DProps) {
       </div>
       <div className="phone-shadow"></div>
     </div>
-  )
+  );
 }

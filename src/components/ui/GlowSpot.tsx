@@ -1,15 +1,15 @@
-import { HTMLAttributes } from 'react'
-import { cn } from '../../utils/cn'
+import type { HTMLAttributes } from 'react';
+import { cn } from '../../utils/cn';
 
 interface GlowSpotProps extends HTMLAttributes<HTMLDivElement> {
-  variant: 'hero' | 'accent' | 'mobile'
+  variant: 'hero' | 'accent' | 'mobile';
   position?: {
-    top?: string
-    bottom?: string
-    left?: string
-    right?: string
-  }
-  opacity?: number
+    top?: string;
+    bottom?: string;
+    left?: string;
+    right?: string;
+  };
+  opacity?: number;
 }
 
 export function GlowSpot({
@@ -23,7 +23,7 @@ export function GlowSpot({
     hero: 'glow-hero',
     accent: 'glow-accent',
     mobile: 'glow-mobile'
-  }
+  };
 
   const positionStyles = {
     ...(position.top && { top: position.top }),
@@ -31,7 +31,7 @@ export function GlowSpot({
     ...(position.left && { left: position.left }),
     ...(position.right && { right: position.right }),
     ...(opacity && { opacity: opacity.toString() })
-  }
+  };
 
   return (
     <div
@@ -39,5 +39,5 @@ export function GlowSpot({
       style={positionStyles}
       {...props}
     />
-  )
+  );
 }

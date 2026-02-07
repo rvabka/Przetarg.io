@@ -1,33 +1,35 @@
-import { Badge } from '../ui/Badge'
-import { Icon } from '../ui/Icon'
+import { Badge } from '../ui/Badge';
 
 interface ComplianceItem {
-  title: string
-  description: string
-  status: 'success' | 'warning' | 'error'
-  statusLabel: string
-  statusIcon: string
-  actions?: { label: string; variant: 'primary' | 'outline' }[]
+  title: string;
+  description: string;
+  status: 'success' | 'warning' | 'error';
+  statusLabel: string;
+  statusIcon: string;
+  actions?: { label: string; variant: 'primary' | 'outline' }[];
 }
 
 const items: ComplianceItem[] = [
   {
     title: 'Certyfikat ISO 27001',
-    description: 'AI wykryło ważny certyfikat w Bazie Wiedzy pasujący do wymagania 3.2.1. Dokument ważny do 2025.',
+    description:
+      'AI wykryło ważny certyfikat w Bazie Wiedzy pasujący do wymagania 3.2.1. Dokument ważny do 2025.',
     status: 'success',
     statusLabel: 'Spełniony',
     statusIcon: 'check_circle'
   },
   {
     title: 'Rezydencja Danych (UE)',
-    description: 'Potwierdzona dostępność regionu Frankfurt zgodnie z sekcją 4.1. Zgodność z RODO zapewniona.',
+    description:
+      'Potwierdzona dostępność regionu Frankfurt zgodnie z sekcją 4.1. Zgodność z RODO zapewniona.',
     status: 'success',
     statusLabel: 'Spełniony',
     statusIcon: 'check_circle'
   },
   {
     title: 'Niestandardowe SLA',
-    description: 'Wymóg 99.999% dostępności przekracza standardową ofertę (99.99%). Wymagana akceptacja techniczna.',
+    description:
+      'Wymóg 99.999% dostępności przekracza standardową ofertę (99.99%). Wymagana akceptacja techniczna.',
     status: 'warning',
     statusLabel: 'Do Przeglądu',
     statusIcon: 'warning',
@@ -36,7 +38,7 @@ const items: ComplianceItem[] = [
       { label: 'Dział Prawny', variant: 'outline' }
     ]
   }
-]
+];
 
 export function ComplianceChecklist() {
   return (
@@ -80,5 +82,5 @@ export function ComplianceChecklist() {
         </div>
       ))}
     </div>
-  )
+  );
 }

@@ -1,11 +1,11 @@
-import { HTMLAttributes } from 'react'
-import { cn } from '../../utils/cn'
+import type { HTMLAttributes } from 'react';
+import { cn } from '../../utils/cn';
 
 interface IconProps extends HTMLAttributes<HTMLSpanElement> {
-  name: string
-  size?: 'sm' | 'md' | 'lg' | 'xl'
-  color?: string
-  filled?: boolean
+  name: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  color?: string;
+  filled?: boolean;
 }
 
 export function Icon({
@@ -21,9 +21,11 @@ export function Icon({
     md: 'text-xl',
     lg: 'text-2xl',
     xl: 'text-4xl'
-  }
+  };
 
-  const filledStyle = filled ? { fontVariationSettings: "'FILL' 1" } : undefined
+  const filledStyle = filled
+    ? { fontVariationSettings: "'FILL' 1" }
+    : undefined;
 
   return (
     <span
@@ -33,5 +35,5 @@ export function Icon({
     >
       {name}
     </span>
-  )
+  );
 }

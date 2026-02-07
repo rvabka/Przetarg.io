@@ -1,9 +1,19 @@
-import { Link } from 'react-router-dom'
-
 export function Footer() {
-  const productLinks = ['Funkcje', 'Cennik', 'Integracje', 'Enterprise', 'Dziennik zmian']
-  const resourceLinks = ['Dokumentacja', 'API Reference', 'Blog', 'Społeczność', 'Centrum Pomocy']
-  const companyLinks = ['O nas', 'Kariera', 'Prawne', 'Prywatność', 'Kontakt']
+  const productLinks = [
+    'Funkcje',
+    'Cennik',
+    'Integracje',
+    'Enterprise',
+    'Dziennik zmian'
+  ];
+  const resourceLinks = [
+    'Dokumentacja',
+    'API Reference',
+    'Blog',
+    'Społeczność',
+    'Centrum Pomocy'
+  ];
+  const companyLinks = ['O nas', 'Kariera', 'Prawne', 'Prywatność', 'Kontakt'];
 
   return (
     <footer className="bg-white/90 border-t border-border-light/50 pt-20 pb-10 w-full backdrop-blur-sm relative z-10">
@@ -20,7 +30,8 @@ export function Footer() {
               </span>
             </div>
             <p className="text-text-muted-light max-w-sm mb-8 text-base font-medium leading-relaxed">
-              Oprogramowanie do zarządzania ofertami oparte na AI, pomagające zespołom szybciej reagować i zdobywać więcej klientów.
+              Oprogramowanie do zarządzania ofertami oparte na AI, pomagające
+              zespołom szybciej reagować i zdobywać więcej klientów.
             </p>
             <div className="flex gap-5">
               <a
@@ -50,7 +61,7 @@ export function Footer() {
               Produkt
             </h4>
             <ul className="space-y-4 text-sm text-text-muted-light font-medium">
-              {productLinks.map((link) => (
+              {productLinks.map(link => (
                 <li key={link}>
                   <a href="#" className="hover:text-primary transition-colors">
                     {link}
@@ -66,7 +77,7 @@ export function Footer() {
               Zasoby
             </h4>
             <ul className="space-y-4 text-sm text-text-muted-light font-medium">
-              {resourceLinks.map((link) => (
+              {resourceLinks.map(link => (
                 <li key={link}>
                   <a href="#" className="hover:text-primary transition-colors">
                     {link}
@@ -82,7 +93,7 @@ export function Footer() {
               Firma
             </h4>
             <ul className="space-y-4 text-sm text-text-muted-light font-medium">
-              {companyLinks.map((link) => (
+              {companyLinks.map(link => (
                 <li key={link}>
                   <a href="#" className="hover:text-primary transition-colors">
                     {link}
@@ -117,5 +128,5 @@ export function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { cn } from '../../utils/cn';
 import { Icon } from '../ui/Icon';
 
@@ -19,7 +19,7 @@ export function IndustryCard({
   description,
   variant,
   className,
-  children
+  children: _children
 }: IndustryCardProps) {
   if (variant === 'cta') {
     return (
