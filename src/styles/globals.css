@@ -1,0 +1,138 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: #065f46;
+  --color-background-light: #ffffff;
+  --color-background-alt: #f9fafb;
+  --color-surface-light: #ffffff;
+  --color-border-light: #e5e5e5;
+  --color-text-main-light: #000000;
+  --color-text-muted-light: #666666;
+
+  --font-display: 'Inter', sans-serif;
+  --font-sans: 'Inter', sans-serif;
+
+  --radius: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+  --radius-3xl: 2rem;
+
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  --width-8xl: 1440px;
+
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+  --shadow-card:
+    0 20px 40px -5px rgba(0, 0, 0, 0.05), 0 8px 16px -6px rgba(0, 0, 0, 0.05);
+}
+
+/* Section Backgrounds */
+.bg-section-white {
+  background-color: #ffffff;
+}
+
+.bg-section-dots {
+  background-color: #f9fafb;
+  background-image: radial-gradient(#e5e7eb 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Glow Effects */
+.glow-spot {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: normal;
+}
+
+.glow-hero {
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(
+    circle,
+    rgba(167, 243, 208, 0.4) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  filter: blur(100px);
+}
+
+.glow-accent {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(52, 211, 153, 0.15) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  filter: blur(80px);
+}
+
+.glow-mobile {
+  width: 900px;
+  height: 900px;
+  background: radial-gradient(
+    circle,
+    rgba(6, 95, 70, 0.25) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  filter: blur(120px);
+}
+
+/* Watermarks */
+.watermark {
+  position: absolute;
+  font-size: 18vw;
+  font-weight: 800;
+  color: rgba(0, 0, 0, 0.02);
+  line-height: 1;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Hide Scrollbar */
+.hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Testimonial Card Animation */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Brand Logos Scroll Animation */
+@keyframes scroll-brands {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+.animate-scroll-brands {
+  animation: scroll-brands 30s linear infinite;
+}
+
+.animate-scroll-brands:hover {
+  animation-play-state: paused;
+}
