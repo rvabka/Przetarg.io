@@ -81,24 +81,27 @@ export function StatisticsSection() {
   const { ref: sectionRef, isInView } = useInView({ threshold: 0.3 });
 
   return (
-    <section ref={sectionRef} className="py-16 w-full bg-section-white">
+    <section
+      ref={sectionRef}
+      className="py-12 sm:py-14 md:py-16 w-full bg-section-white"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <motion.div
-          className="text-center max-w-4xl mx-auto mb-20"
+          className="text-center max-w-4xl mx-auto mb-10 sm:mb-14 lg:mb-20 px-2"
           initial={{ opacity: 0, y: 16 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
-          <h2 className="text-4xl font-[800] mb-6 text-text-main-light">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-[800] mb-4 sm:mb-6 text-text-main-light leading-tight">
             Dlaczego zespoły zakupowe wybierają TenderAI
           </h2>
-          <p className="text-lg text-text-muted-light font-medium">
+          <p className="text-sm sm:text-base lg:text-lg text-text-muted-light font-medium">
             Automatyzujemy żmudne części procesu RFP, abyś mógł skupić się na
             strategii i wygrywaniu zleceń.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 lg:gap-8">
           {stats.map((stat, index) => (
             <motion.div
               key={index}
@@ -113,9 +116,9 @@ export function StatisticsSection() {
               <Card
                 variant="elevated"
                 hoverable
-                className="p-8 text-center flex flex-col items-center justify-center min-h-[220px]"
+                className="p-4 sm:p-6 lg:p-8 text-center flex flex-col items-center justify-center min-h-[160px] sm:min-h-[180px] lg:min-h-[220px]"
               >
-                <div className="text-6xl font-bold text-primary mb-4 group-hover:scale-110 transition-transform inline-block">
+                <div className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-primary mb-2 sm:mb-3 lg:mb-4 group-hover:scale-110 transition-transform inline-block">
                   <CountUp
                     target={stat.numericValue}
                     suffix={stat.suffix}
@@ -123,10 +126,10 @@ export function StatisticsSection() {
                     active={isInView}
                   />
                 </div>
-                <div className="text-base font-bold text-text-main-light uppercase tracking-wide">
+                <div className="text-xs sm:text-sm lg:text-base font-bold text-text-main-light uppercase tracking-wide">
                   {stat.label}
                 </div>
-                <div className="text-sm text-text-muted-light mt-2 font-medium">
+                <div className="text-xs sm:text-sm text-text-muted-light mt-1 sm:mt-2 font-medium hidden sm:block">
                   {stat.description}
                 </div>
               </Card>

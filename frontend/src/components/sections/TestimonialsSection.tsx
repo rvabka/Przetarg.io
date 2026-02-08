@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useRef } from 'react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Autoplay, Pagination, Navigation } from 'swiper/modules';
+import type { Swiper as SwiperType } from 'swiper';
 import { GlowSpot } from '../ui/GlowSpot';
 import { Icon } from '../ui/Icon';
+
+// Swiper styles
+import 'swiper/swiper-bundle.css';
 
 const testimonials = [
   {
@@ -38,21 +43,18 @@ const testimonials = [
   }
 ];
 
-const cardOffsets = ['lg:translate-x-12', 'lg:-translate-x-4'];
-const GAP = 48; // gap-12 = 3rem = 48px
-
 function TestimonialCard({
   testimonial,
-  offsetClass
+  isOffset = false
 }: {
   testimonial: (typeof testimonials)[0];
-  offsetClass: string;
+  isOffset?: boolean;
 }) {
   return (
     <div
-      className={`bg-white p-12 rounded-2xl shadow-card border border-gray-100 relative overflow-hidden ${offsetClass}`}
+      className={`bg-white p-6 sm:p-8 lg:p-10 rounded-2xl shadow-lg border border-gray-100 relative h-full transition-all duration-300 ${isOffset ? 'lg:ml-0 lg:mr-8' : 'lg:ml-8 lg:mr-0'}`}
     >
-      <div className="flex justify-between items-start mb-6 relative z-10">
+      <div className="flex justify-between items-start mb-4 sm:mb-5 relative z-10">
         <div className="flex items-center gap-1 text-yellow-400">
           {[1, 2, 3, 4, 5].map(star => (
             <Icon
@@ -74,14 +76,14 @@ function TestimonialCard({
         <Icon
           name="format_quote"
           size="xl"
-          className="text-gray-200 text-5xl opacity-50"
+          className="text-gray-200 text-3xl sm:text-5xl opacity-50"
         />
       </div>
-      <p className="text-xl font-medium text-gray-800 mb-8 leading-relaxed relative z-10">
+      <p className="text-base sm:text-lg lg:text-xl font-medium text-gray-800 mb-5 sm:mb-6 leading-relaxed relative z-10">
         &ldquo;{testimonial.text}&rdquo;
       </p>
-      <div className="flex items-center gap-4 relative z-10">
-        <div className="w-14 h-14 rounded-full bg-gray-200 overflow-hidden border-2 border-white shadow-md shrink-0">
+      <div className="flex items-center gap-3 sm:gap-4 relative z-10">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gray-200 overflow-hidden border-2 border-white shadow-md shrink-0">
           <img
             alt={testimonial.author}
             className="w-full h-full object-cover"
@@ -89,10 +91,10 @@ function TestimonialCard({
           />
         </div>
         <div>
-          <p className="font-bold text-base text-text-main-light">
+          <p className="font-bold text-sm sm:text-base text-text-main-light">
             {testimonial.author}
           </p>
-          <p className="text-sm text-text-muted-light font-medium">
+          <p className="text-xs sm:text-sm text-text-muted-light font-medium">
             {testimonial.role}
           </p>
         </div>
@@ -102,95 +104,13 @@ function TestimonialCard({
 }
 
 export function TestimonialsSection() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [skipTransition, setSkipTransition] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [slotHeight, setSlotHeight] = useState(300);
+  const swiperRef = useRef<SwiperType | null>(null);
 
-  // Triple the array: [0,1,2,3, 0,1,2,3, 0,1,2,3]
-  // Start at index = testimonials.length (the middle copy)
-  // This gives room to go backward and forward
-  const tripled = [...testimonials, ...testimonials, ...testimonials];
-  const baseOffset = testimonials.length;
-
-  // Measure real card height on mount & resize
-  useEffect(() => {
-    const measure = () => {
-      if (trackRef.current) {
-        const firstCard = trackRef.current.children[0] as HTMLElement;
-        if (firstCard) {
-          setSlotHeight(firstCard.offsetHeight + GAP);
-        }
-      }
-    };
-    // Wait for render
-    const raf = requestAnimationFrame(measure);
-    window.addEventListener('resize', measure);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', measure);
-    };
-  }, []);
-
-  const startAutoScroll = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      setActiveIndex(prev => prev + 1);
-    }, 5000);
-  }, []);
-
-  useEffect(() => {
-    startAutoScroll();
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [startAutoScroll]);
-
-  // Seamless loop: when animation finishes at an edge, jump to middle copy instantly
-  const handleAnimationComplete = useCallback(() => {
-    setIsAnimating(false);
-    setActiveIndex(prev => {
-      const len = testimonials.length;
-      // If we're outside the middle copy range, remap
-      if (prev < 0 || prev >= len) {
-        const remapped = ((prev % len) + len) % len;
-        // Instant jump — no transition
-        setSkipTransition(true);
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setSkipTransition(false);
-          });
-        });
-        return remapped;
-      }
-      return prev;
-    });
-  }, []);
-
-  const goNext = () => {
-    if (isAnimating) return;
-    setIsAnimating(true);
-    setActiveIndex(prev => prev + 1);
-    startAutoScroll();
-  };
-
-  const goPrev = () => {
-    if (isAnimating) return;
-    setIsAnimating(true);
-    setActiveIndex(prev => prev - 1);
-    startAutoScroll();
-  };
-
-  // Y offset: move the track up so the active card is at the top of the viewport
-  const translateY = -(baseOffset + activeIndex) * slotHeight;
-
-  // Visible window = 2 cards (minus one gap so both cards are fully shown)
-  const windowHeight = slotHeight * 2 - GAP;
+  const goNext = () => swiperRef.current?.slideNext();
+  const goPrev = () => swiperRef.current?.slidePrev();
 
   return (
-    <section className="py-32 relative w-full overflow-hidden bg-section-dots">
+    <section className="py-16 sm:py-24 lg:py-32 relative w-full overflow-hidden bg-section-dots">
       <GlowSpot
         variant="accent"
         position={{ bottom: '0', right: '5%' }}
@@ -203,25 +123,25 @@ export function TestimonialsSection() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-start">
-          {/* Left Column - Sticky */}
-          <div className="lg:sticky lg:top-32 self-start">
-            <div className="inline-block px-4 py-1.5 rounded-full bg-white border border-gray-200 shadow-sm mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-start">
+          {/* Left Column */}
+          <div className="lg:sticky lg:top-32 self-start text-center lg:text-left">
+            <div className="inline-block px-4 py-1.5 rounded-full bg-white border border-gray-200 shadow-sm mb-6 sm:mb-8">
               <span className="text-xs font-bold tracking-wide text-gray-800 uppercase">
                 Opinie Klientów
               </span>
             </div>
-            <h2 className="text-5xl md:text-6xl font-[800] text-text-main-light tracking-tight mb-8">
-              Zaufali nam <br /> profesjonaliści
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-[800] text-text-main-light tracking-tight mb-4 sm:mb-6 lg:mb-8">
+              Zaufali nam <br className="hidden sm:block" /> profesjonaliści
             </h2>
-            <p className="text-xl text-text-muted-light leading-relaxed mb-12 max-w-lg font-medium">
+            <p className="text-base sm:text-lg lg:text-xl text-text-muted-light leading-relaxed mb-8 sm:mb-10 lg:mb-12 max-w-lg mx-auto lg:mx-0 font-medium">
               Tysiące użytkowników polega na nas każdego dnia, aby zarządzać
               przetargami z pewnością i łatwością. Poznaj ich historie sukcesu.
             </p>
-            <div className="flex gap-4">
+            <div className="flex gap-3 sm:gap-4 justify-center lg:justify-start">
               <button
                 onClick={goPrev}
-                className="w-14 h-14 rounded-full border border-gray-200 flex items-center justify-center bg-white hover:bg-gray-50 transition-colors shadow-sm group"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-gray-200 flex items-center justify-center bg-white hover:bg-gray-50 active:scale-95 transition-all shadow-sm group"
                 aria-label="Previous testimonial"
               >
                 <Icon
@@ -232,7 +152,7 @@ export function TestimonialsSection() {
               </button>
               <button
                 onClick={goNext}
-                className="w-14 h-14 rounded-full border border-gray-200 flex items-center justify-center bg-white hover:bg-gray-50 transition-colors shadow-sm group"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-gray-200 flex items-center justify-center bg-white hover:bg-gray-50 active:scale-95 transition-all shadow-sm group"
                 aria-label="Next testimonial"
               >
                 <Icon
@@ -242,32 +162,52 @@ export function TestimonialsSection() {
                 />
               </button>
             </div>
+
+            {/* Custom pagination */}
+            <div className="testimonials-pagination flex gap-2 mt-8 justify-center lg:justify-start" />
           </div>
 
-          {/* Right Column - Smooth Vertical Carousel */}
-          <div
-            className="relative mt-12 overflow-x-visible overflow-y-clip pr-14 lg:pr-16"
-            style={{ height: windowHeight > 0 ? windowHeight : 'auto' }}
-          >
-            <motion.div
-              ref={trackRef}
-              className="flex flex-col gap-12"
-              animate={{ y: translateY }}
-              transition={
-                skipTransition
-                  ? { duration: 0 }
-                  : { duration: 0.65, ease: [0.4, 0, 0.15, 1] }
-              }
-              onAnimationComplete={handleAnimationComplete}
+          {/* Right Column - Swiper Carousel */}
+          <div className="relative mt-4 sm:mt-8 lg:mt-0 lg:pr-4">
+            <Swiper
+              onSwiper={swiper => {
+                swiperRef.current = swiper;
+              }}
+              modules={[Autoplay, Pagination, Navigation]}
+              spaceBetween={24}
+              slidesPerView={1}
+              loop={true}
+              speed={500}
+              autoplay={{
+                delay: 5000,
+                disableOnInteraction: false,
+                pauseOnMouseEnter: true
+              }}
+              pagination={{
+                el: '.testimonials-pagination',
+                clickable: true,
+                bulletClass:
+                  'h-2.5 w-2.5 rounded-full bg-gray-300 hover:bg-gray-400 transition-all duration-300 cursor-pointer inline-block',
+                bulletActiveClass: '!bg-primary !w-8'
+              }}
+              breakpoints={{
+                1024: {
+                  direction: 'vertical',
+                  slidesPerView: 2,
+                  spaceBetween: 24
+                }
+              }}
+              className="lg:h-[520px]"
             >
-              {tripled.map((testimonial, idx) => (
-                <TestimonialCard
-                  key={idx}
-                  testimonial={testimonial}
-                  offsetClass={cardOffsets[idx % 2]}
-                />
+              {testimonials.map((testimonial, idx) => (
+                <SwiperSlide key={idx} className="h-auto!">
+                  <TestimonialCard
+                    testimonial={testimonial}
+                    isOffset={idx % 2 === 0}
+                  />
+                </SwiperSlide>
               ))}
-            </motion.div>
+            </Swiper>
           </div>
         </div>
       </div>
