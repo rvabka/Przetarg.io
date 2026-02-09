@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/Button';
 
 export function Navigation() {
@@ -7,10 +8,10 @@ export function Navigation() {
   const location = useLocation();
 
   const menuItems = [
-    { label: 'Funkcje', path: '/funkcje' },
-    { label: 'Rozwiązania', path: '/rozwiazania' },
-    { label: 'Cennik', path: '/cennik' },
-    { label: 'Zasoby', path: '/zasoby' }
+    { label: 'Funkcje', path: '/funkcje', icon: 'auto_awesome' },
+    { label: 'Rozwiązania', path: '/rozwiazania', icon: 'category' },
+    { label: 'Cennik', path: '/cennik', icon: 'payments' },
+    { label: 'Zasoby', path: '/zasoby', icon: 'library_books' }
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -26,6 +27,11 @@ export function Navigation() {
       document.body.style.overflow = 'unset';
     };
   }, [isMenuOpen]);
+
+  // Close menu on route change
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <>
@@ -66,15 +72,39 @@ export function Navigation() {
                 Rozpocznij
               </Button>
 
-              {/* Mobile Menu Button */}
+              {/* Mobile Menu Button - Animated Hamburger */}
               <button
-                className="md:hidden p-2 relative z-50"
+                className="md:hidden p-2 relative z-50 w-10 h-10 flex items-center justify-center"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 aria-label="Toggle menu"
               >
-                <span className="material-symbols-outlined text-2xl">
-                  {isMenuOpen ? 'close' : 'menu'}
-                </span>
+                <div className="w-6 h-5 relative flex flex-col justify-between">
+                  <motion.span
+                    className="w-full h-0.5 bg-text-main-light rounded-full origin-left"
+                    animate={
+                      isMenuOpen
+                        ? { rotate: 45, y: 0, x: 2 }
+                        : { rotate: 0, y: 0, x: 0 }
+                    }
+                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                  />
+                  <motion.span
+                    className="w-full h-0.5 bg-text-main-light rounded-full"
+                    animate={
+                      isMenuOpen ? { opacity: 0, x: -10 } : { opacity: 1, x: 0 }
+                    }
+                    transition={{ duration: 0.2 }}
+                  />
+                  <motion.span
+                    className="w-full h-0.5 bg-text-main-light rounded-full origin-left"
+                    animate={
+                      isMenuOpen
+                        ? { rotate: -45, y: 0, x: 2 }
+                        : { rotate: 0, y: 0, x: 0 }
+                    }
+                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                  />
+                </div>
               </button>
             </div>
           </div>
@@ -82,47 +112,83 @@ export function Navigation() {
       </nav>
 
       {/* Mobile Menu Overlay */}
-      <div
-        className={`fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity duration-300 ${
-          isMenuOpen
-            ? 'opacity-100 pointer-events-auto'
-            : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={() => setIsMenuOpen(false)}
-      />
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={() => setIsMenuOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Mobile Menu Sidebar */}
-      <div
-        className={`fixed top-0 right-0 h-full w-[300px] bg-white z-[45] md:hidden transform transition-transform duration-300 ease-out shadow-2xl ${
-          isMenuOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        <div className="flex flex-col h-full pt-24 px-6">
-          <div className="flex flex-col space-y-6 mb-8">
-            {menuItems.map(item => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`text-lg font-bold hover:text-primary transition-colors ${
-                  isActive(item.path) ? 'text-primary' : 'text-text-main-light'
-                }`}
-                onClick={() => setIsMenuOpen(false)}
+      {/* Mobile Menu Full Screen */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            className="fixed inset-0 z-[45] md:hidden bg-white"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+          >
+            <div className="flex flex-col h-full pt-20 px-6 pb-8 overflow-y-auto">
+              {/* Menu Items */}
+              <div className="flex flex-col space-y-2 flex-1">
+                {menuItems.map((item, index) => (
+                  <motion.div
+                    key={item.path}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 + index * 0.05, duration: 0.3 }}
+                  >
+                    <Link
+                      to={item.path}
+                      className={`flex items-center gap-4 py-4 px-4 rounded-xl transition-all ${
+                        isActive(item.path)
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-text-main-light hover:bg-gray-50'
+                      }`}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <span className="material-symbols-outlined text-2xl">
+                        {item.icon}
+                      </span>
+                      <span className="text-lg font-semibold">
+                        {item.label}
+                      </span>
+                      <span className="material-symbols-outlined ml-auto text-gray-400">
+                        chevron_right
+                      </span>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Bottom Actions */}
+              <motion.div
+                className="pt-6 mt-auto border-t border-gray-100 space-y-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
               >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-
-          <div className="pt-6 border-t border-border-light">
-            <button className="w-full text-left text-lg font-bold text-text-main-light hover:text-primary transition-colors mb-4">
-              Zaloguj się
-            </button>
-            <Button size="md" className="w-full">
-              Rozpocznij
-            </Button>
-          </div>
-        </div>
-      </div>
+                <button className="w-full py-3 px-4 text-center text-base font-semibold text-text-main-light hover:text-primary transition-colors rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5">
+                  Zaloguj się
+                </button>
+                <Button size="lg" className="w-full justify-center">
+                  Rozpocznij za darmo
+                </Button>
+                <p className="text-xs text-center text-text-muted-light mt-4">
+                  Bez karty kredytowej • 14 dni za darmo
+                </p>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
