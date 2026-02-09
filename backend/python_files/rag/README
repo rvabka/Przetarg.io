@@ -1,0 +1,9 @@
+# build database (one-time)
+python ingest.py
+
+# Serve
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Query
+GET /search?q=office+cleaning&limit=5
+GET /health
