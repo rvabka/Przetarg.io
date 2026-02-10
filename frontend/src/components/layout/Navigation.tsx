@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/Button';
+import { useAuth } from '../../contexts/AuthContext';
 
 export function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, profile, signOut } = useAuth();
 
   const menuItems = [
     { label: 'Funkcje', path: '/funkcje', icon: 'auto_awesome' },
@@ -28,10 +32,25 @@ export function Navigation() {
     };
   }, [isMenuOpen]);
 
-  // Close menu on route change
+  // Close menu on route change (e.g., browser back/forward)
   useEffect(() => {
+    // This is intentional: we need to close the menu when route changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMenuOpen(false);
   }, [location.pathname]);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isProfileMenuOpen && !target.closest('.profile-menu-container')) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isProfileMenuOpen]);
 
   return (
     <>
@@ -65,12 +84,124 @@ export function Navigation() {
 
             {/* Actions */}
             <div className="flex items-center space-x-4">
-              <button className="hidden md:block text-sm font-semibold hover:text-primary transition-colors">
-                Zaloguj się
-              </button>
-              <Button size="md" className="hidden md:inline-flex">
-                Rozpocznij
-              </Button>
+              {user && profile ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="hidden md:inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-lg">dashboard</span>
+                    Dashboard
+                  </Link>
+                  <div className="hidden md:block relative profile-menu-container">
+                    <button
+                      onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                        {profile.first_name?.[0]}
+                        {profile.last_name?.[0]}
+                      </div>
+                      <span className="text-sm font-semibold text-text-main-light">
+                        {profile.first_name} {profile.last_name}
+                      </span>
+                      <span className="material-symbols-outlined text-sm">
+                        expand_more
+                      </span>
+                    </button>
+
+                    {/* Profile Dropdown */}
+                    <AnimatePresence>
+                      {isProfileMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-card border border-border-light py-2"
+                        >
+                          <div className="px-4 py-3 border-b border-border-light">
+                            <p className="text-sm font-semibold text-text-main-light">
+                              {profile.first_name} {profile.last_name}
+                            </p>
+                            <p className="text-xs text-text-muted-light">
+                              {user.email}
+                            </p>
+                            <p className="text-xs text-text-muted-light mt-1">
+                              {profile.company_name}
+                            </p>
+                          </div>
+                          <Link
+                            to="/dashboard"
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                            onClick={() => setIsProfileMenuOpen(false)}
+                          >
+                            <span className="material-symbols-outlined text-xl">
+                              dashboard
+                            </span>
+                            <span className="text-sm font-medium">
+                              Dashboard
+                            </span>
+                          </Link>
+                          <Link
+                            to="/profil"
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                            onClick={() => setIsProfileMenuOpen(false)}
+                          >
+                            <span className="material-symbols-outlined text-xl">
+                              person
+                            </span>
+                            <span className="text-sm font-medium">
+                              Mój profil
+                            </span>
+                          </Link>
+                          <Link
+                            to="/ustawienia"
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                            onClick={() => setIsProfileMenuOpen(false)}
+                          >
+                            <span className="material-symbols-outlined text-xl">
+                              settings
+                            </span>
+                            <span className="text-sm font-medium">
+                              Ustawienia
+                            </span>
+                          </Link>
+                          <div className="border-t border-border-light my-2"></div>
+                          <button
+                            onClick={async () => {
+                              await signOut();
+                              setIsProfileMenuOpen(false);
+                              navigate('/');
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2 hover:bg-red-50 text-red-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-xl">
+                              logout
+                            </span>
+                            <span className="text-sm font-medium">
+                              Wyloguj się
+                            </span>
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/zaloguj"
+                    className="hidden md:block text-sm font-semibold hover:text-primary transition-colors"
+                  >
+                    Zaloguj się
+                  </Link>
+                  <Link to="/zarejestruj">
+                    <Button size="md" className="hidden md:inline-flex">
+                      Rozpocznij
+                    </Button>
+                  </Link>
+                </>
+              )}
 
               {/* Mobile Menu Button - Animated Hamburger */}
               <button
@@ -175,15 +306,99 @@ export function Navigation() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.3 }}
               >
-                <button className="w-full py-3 px-4 text-center text-base font-semibold text-text-main-light hover:text-primary transition-colors rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5">
-                  Zaloguj się
-                </button>
-                <Button size="lg" className="w-full justify-center">
-                  Rozpocznij za darmo
-                </Button>
-                <p className="text-xs text-center text-text-muted-light mt-4">
-                  Bez karty kredytowej • 14 dni za darmo
-                </p>
+                {user && profile ? (
+                  <>
+                    <div className="px-4 py-3 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-white font-semibold">
+                          {profile.first_name?.[0]}
+                          {profile.last_name?.[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-text-main-light">
+                            {profile.first_name} {profile.last_name}
+                          </p>
+                          <p className="text-xs text-text-muted-light">
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-text-muted-light">
+                        {profile.company_name}
+                      </p>
+                    </div>
+                    <Link
+                      to="/dashboard"
+                      className="flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5 transition-all"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <span className="material-symbols-outlined text-xl">
+                        dashboard
+                      </span>
+                      <span className="text-base font-semibold">
+                        Dashboard
+                      </span>
+                    </Link>
+                    <Link
+                      to="/profil"
+                      className="flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5 transition-all"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <span className="material-symbols-outlined text-xl">
+                        person
+                      </span>
+                      <span className="text-base font-semibold">
+                        Mój profil
+                      </span>
+                    </Link>
+                    <Link
+                      to="/ustawienia"
+                      className="flex items-center gap-3 py-3 px-4 rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5 transition-all"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <span className="material-symbols-outlined text-xl">
+                        settings
+                      </span>
+                      <span className="text-base font-semibold">
+                        Ustawienia
+                      </span>
+                    </Link>
+                    <button
+                      onClick={async () => {
+                        await signOut();
+                        setIsMenuOpen(false);
+                        navigate('/');
+                      }}
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-all font-semibold"
+                    >
+                      <span className="material-symbols-outlined text-xl">
+                        logout
+                      </span>
+                      <span className="text-base">Wyloguj się</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/zaloguj"
+                      className="w-full py-3 px-4 text-center text-base font-semibold text-text-main-light hover:text-primary transition-colors rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-primary/5 block"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Zaloguj się
+                    </Link>
+                    <Link
+                      to="/zarejestruj"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <Button size="lg" className="w-full justify-center">
+                        Rozpocznij za darmo
+                      </Button>
+                    </Link>
+                    <p className="text-xs text-center text-text-muted-light mt-4">
+                      Bez karty kredytowej • 14 dni za darmo
+                    </p>
+                  </>
+                )}
               </motion.div>
             </div>
           </motion.div>
