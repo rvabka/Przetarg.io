@@ -1,14 +1,34 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { XCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
+
+interface FieldErrors {
+  email?: string;
+  password?: string;
+}
+
+function validateEmail(email: string): string | undefined {
+  if (!email.trim()) return 'Email jest wymagany.';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) return 'Podaj prawidłowy adres email.';
+  return undefined;
+}
+
+function validatePassword(password: string): string | undefined {
+  if (!password) return 'Hasło jest wymagane.';
+  if (password.length < 6) return 'Hasło musi mieć co najmniej 6 znaków.';
+  return undefined;
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { signIn } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -17,11 +37,31 @@ export function LoginPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (fieldErrors[name as keyof FieldErrors]) {
+      setFieldErrors(prev => ({ ...prev, [name]: undefined }));
+    }
+    if (error) setError('');
+  };
+
+  const validateForm = (): boolean => {
+    const errors: FieldErrors = {};
+    errors.email = validateEmail(formData.email);
+    errors.password = validatePassword(formData.password);
+
+    const filteredErrors: FieldErrors = {};
+    if (errors.email) filteredErrors.email = errors.email;
+    if (errors.password) filteredErrors.password = errors.password;
+
+    setFieldErrors(filteredErrors);
+    return Object.keys(filteredErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!validateForm()) return;
+
     setLoading(true);
 
     const { error } = await signIn(formData.email, formData.password);
@@ -29,11 +69,18 @@ export function LoginPage() {
     setLoading(false);
 
     if (error) {
-      setError('Nieprawidłowy email lub hasło');
+      setError(error.message || 'Nieprawidłowy email lub hasło.');
     } else {
       navigate('/dashboard');
     }
   };
+
+  const inputClass = (field: keyof FieldErrors) =>
+    `w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
+      fieldErrors[field]
+        ? 'border-red-400 focus:ring-red-300 bg-red-50/50'
+        : 'border-border-light focus:ring-primary'
+    }`;
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -43,7 +90,6 @@ export function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Header */}
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-10 h-10 bg-black rounded-none flex items-center justify-center text-white font-bold text-xl">
@@ -67,12 +113,16 @@ export function LoginPage() {
           </p>
         </div>
 
-        {/* Form */}
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
+            <motion.div
+              className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-2"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </motion.div>
           )}
 
           <div className="space-y-4">
@@ -84,12 +134,18 @@ export function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                required
+                autoComplete="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                className={inputClass('email')}
                 placeholder="twoj@email.com"
               />
+              {fieldErrors.email && (
+                <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             <div>
@@ -108,12 +164,18 @@ export function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
-                required
+                autoComplete="current-password"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                className={inputClass('password')}
                 placeholder="••••••••"
               />
+              {fieldErrors.password && (
+                <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
           </div>
 
@@ -126,7 +188,6 @@ export function LoginPage() {
             {loading ? 'Logowanie...' : 'Zaloguj się'}
           </Button>
 
-          {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border-light"></div>
@@ -138,7 +199,6 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Social Login Options */}
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"

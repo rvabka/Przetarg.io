@@ -1,14 +1,99 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { XCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
+
+interface FieldErrors {
+  email?: string;
+  phone?: string;
+  password?: string;
+  confirmPassword?: string;
+  firstName?: string;
+  lastName?: string;
+  nip?: string;
+  companyName?: string;
+  website?: string;
+  companySize?: string;
+  privacyConsent?: string;
+}
+
+function validateEmail(email: string): string | undefined {
+  if (!email.trim()) return 'Email jest wymagany.';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) return 'Podaj prawidłowy adres email.';
+  return undefined;
+}
+
+function validatePhone(phone: string): string | undefined {
+  if (!phone.trim()) return 'Numer telefonu jest wymagany.';
+  // Accept formats like: +48123456789, +48 123 456 789, 123456789, 123-456-789
+  const cleaned = phone.replace(/[\s\-()]/g, '');
+  if (!/^\+?\d{9,15}$/.test(cleaned)) return 'Podaj prawidłowy numer telefonu (np. +48 123 456 789).';
+  return undefined;
+}
+
+function validatePassword(password: string): string | undefined {
+  if (!password) return 'Hasło jest wymagane.';
+  if (password.length < 6) return 'Hasło musi mieć co najmniej 6 znaków.';
+  if (password.length > 72) return 'Hasło może mieć maksymalnie 72 znaki.';
+  return undefined;
+}
+
+function validateConfirmPassword(password: string, confirmPassword: string): string | undefined {
+  if (!confirmPassword) return 'Potwierdź hasło.';
+  if (password !== confirmPassword) return 'Hasła nie są zgodne.';
+  return undefined;
+}
+
+function validateRequired(value: string, fieldName: string): string | undefined {
+  if (!value.trim()) return `${fieldName} jest wymagane.`;
+  return undefined;
+}
+
+function validateNip(nip: string): string | undefined {
+  if (!nip.trim()) return 'NIP jest wymagany.';
+  const cleaned = nip.replace(/[\s\-]/g, '');
+  if (!/^\d{10}$/.test(cleaned)) return 'NIP musi składać się z 10 cyfr.';
+
+  const weights = [6, 5, 7, 2, 3, 4, 5, 6, 7];
+  const digits = cleaned.split('').map(Number);
+  const sum = weights.reduce((acc, w, i) => acc + w * digits[i], 0);
+  if (sum % 11 !== digits[9]) return 'Podany NIP jest nieprawidłowy.';
+
+  return undefined;
+}
+
+function validateWebsite(url: string): string | undefined {
+  if (!url.trim()) return 'Strona internetowa jest wymagana.';
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'Adres strony musi zaczynać się od http:// lub https://';
+    }
+  } catch {
+    return 'Podaj prawidłowy adres URL (np. https://twojafirma.pl).';
+  }
+  return undefined;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+      {message}
+    </p>
+  );
+}
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const { signUp } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -21,7 +106,6 @@ export function RegisterPage() {
     website: '',
     companySize: '',
     tenderDescription: '',
-    searchAllPoland: false,
     privacyConsent: false,
   });
 
@@ -43,25 +127,44 @@ export function RegisterPage() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+    if (fieldErrors[name as keyof FieldErrors]) {
+      setFieldErrors(prev => ({ ...prev, [name]: undefined }));
+    }
+    if (error) setError('');
+  };
+
+  const validateForm = (): boolean => {
+    const errors: FieldErrors = {};
+
+    errors.email = validateEmail(formData.email);
+    errors.phone = validatePhone(formData.phone);
+    errors.password = validatePassword(formData.password);
+    errors.confirmPassword = validateConfirmPassword(formData.password, formData.confirmPassword);
+    errors.firstName = validateRequired(formData.firstName, 'Imię');
+    errors.lastName = validateRequired(formData.lastName, 'Nazwisko');
+    errors.nip = validateNip(formData.nip);
+    errors.companyName = validateRequired(formData.companyName, 'Nazwa firmy');
+    errors.website = validateWebsite(formData.website);
+    errors.companySize = formData.companySize ? undefined : 'Wybierz wielkość firmy.';
+    errors.privacyConsent = formData.privacyConsent ? undefined : 'Musisz zaakceptować politykę prywatności.';
+
+    // Filter out undefined entries
+    const filteredErrors: FieldErrors = {};
+    for (const [key, value] of Object.entries(errors)) {
+      if (value) (filteredErrors as Record<string, string>)[key] = value;
+    }
+
+    setFieldErrors(filteredErrors);
+    return Object.keys(filteredErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Validation
-    if (formData.password !== formData.confirmPassword) {
-      setError('Hasła nie są zgodne');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Hasło musi mieć co najmniej 6 znaków');
-      return;
-    }
-
-    if (!formData.privacyConsent) {
-      setError('Musisz zaakceptować politykę prywatności');
+    if (!validateForm()) {
+      const firstErrorField = document.querySelector('.text-red-600');
+      firstErrorField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -76,17 +179,23 @@ export function RegisterPage() {
       website: formData.website,
       company_size: formData.companySize,
       tender_description: formData.tenderDescription,
-      search_all_poland: formData.searchAllPoland,
     });
 
     setLoading(false);
 
     if (error) {
-      setError(error.message || 'Wystąpił błąd podczas rejestracji');
+      setError(error.message || 'Wystąpił błąd podczas rejestracji.');
     } else {
       navigate('/potwierdz-email', { state: { email: formData.email } });
     }
   };
+
+  const inputClass = (field: keyof FieldErrors) =>
+    `w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
+      fieldErrors[field]
+        ? 'border-red-400 focus:ring-red-300 bg-red-50/50'
+        : 'border-border-light focus:ring-primary'
+    }`;
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -96,7 +205,6 @@ export function RegisterPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Header */}
         <div className="text-center">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-10 h-10 bg-black rounded-none flex items-center justify-center text-white font-bold text-xl">
@@ -120,16 +228,19 @@ export function RegisterPage() {
           </p>
         </div>
 
-        {/* Form */}
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
+            <motion.div
+              className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-2"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </motion.div>
           )}
 
           <div className="space-y-4">
-            {/* Email & Password */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -139,12 +250,13 @@ export function RegisterPage() {
                   id="email"
                   name="email"
                   type="email"
-                  required
+                  autoComplete="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('email')}
                   placeholder="twoj@email.com"
                 />
+                <FieldError message={fieldErrors.email} />
               </div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -154,12 +266,13 @@ export function RegisterPage() {
                   id="phone"
                   name="phone"
                   type="tel"
-                  required
+                  autoComplete="tel"
                   value={formData.phone}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('phone')}
                   placeholder="+48 123 456 789"
                 />
+                <FieldError message={fieldErrors.phone} />
               </div>
             </div>
 
@@ -172,12 +285,18 @@ export function RegisterPage() {
                   id="password"
                   name="password"
                   type="password"
-                  required
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('password')}
                   placeholder="••••••••"
                 />
+                <FieldError message={fieldErrors.password} />
+                {!fieldErrors.password && formData.password && (
+                  <p className="mt-1.5 text-xs text-text-muted-light">
+                    Min. 6 znaków
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -187,16 +306,16 @@ export function RegisterPage() {
                   id="confirmPassword"
                   name="confirmPassword"
                   type="password"
-                  required
+                  autoComplete="new-password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('confirmPassword')}
                   placeholder="••••••••"
                 />
+                <FieldError message={fieldErrors.confirmPassword} />
               </div>
             </div>
 
-            {/* Personal Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="firstName" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -206,12 +325,13 @@ export function RegisterPage() {
                   id="firstName"
                   name="firstName"
                   type="text"
-                  required
+                  autoComplete="given-name"
                   value={formData.firstName}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('firstName')}
                   placeholder="Jan"
                 />
+                <FieldError message={fieldErrors.firstName} />
               </div>
               <div>
                 <label htmlFor="lastName" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -221,16 +341,16 @@ export function RegisterPage() {
                   id="lastName"
                   name="lastName"
                   type="text"
-                  required
+                  autoComplete="family-name"
                   value={formData.lastName}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('lastName')}
                   placeholder="Kowalski"
                 />
+                <FieldError message={fieldErrors.lastName} />
               </div>
             </div>
 
-            {/* Company Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="nip" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -240,12 +360,14 @@ export function RegisterPage() {
                   id="nip"
                   name="nip"
                   type="text"
-                  required
+                  inputMode="numeric"
                   value={formData.nip}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('nip')}
                   placeholder="1234567890"
+                  maxLength={13}
                 />
+                <FieldError message={fieldErrors.nip} />
               </div>
               <div>
                 <label htmlFor="companyName" className="block text-sm font-semibold text-text-main-light mb-2">
@@ -255,12 +377,13 @@ export function RegisterPage() {
                   id="companyName"
                   name="companyName"
                   type="text"
-                  required
+                  autoComplete="organization"
                   value={formData.companyName}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className={inputClass('companyName')}
                   placeholder="Nazwa Twojej Firmy"
                 />
+                <FieldError message={fieldErrors.companyName} />
               </div>
             </div>
 
@@ -272,15 +395,18 @@ export function RegisterPage() {
                 id="website"
                 name="website"
                 type="url"
-                required
+                autoComplete="url"
                 value={formData.website}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                className={inputClass('website')}
                 placeholder="https://twojafirma.pl"
               />
-              <p className="mt-1 text-xs text-text-muted-light">
-                Link do strony internetowej Twojej firmy
-              </p>
+              <FieldError message={fieldErrors.website} />
+              {!fieldErrors.website && (
+                <p className="mt-1 text-xs text-text-muted-light">
+                  Link do strony internetowej Twojej firmy
+                </p>
+              )}
             </div>
 
             <div>
@@ -290,10 +416,9 @@ export function RegisterPage() {
               <select
                 id="companySize"
                 name="companySize"
-                required
                 value={formData.companySize}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border border-border-light rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all bg-white"
+                className={`${inputClass('companySize')} bg-white`}
               >
                 <option value="">Wybierz wielkość firmy</option>
                 {companySizes.map(size => (
@@ -302,9 +427,9 @@ export function RegisterPage() {
                   </option>
                 ))}
               </select>
+              <FieldError message={fieldErrors.companySize} />
             </div>
 
-            {/* Tender Description */}
             <div>
               <label htmlFor="tenderDescription" className="block text-sm font-semibold text-text-main-light mb-2">
                 Opisz jakich przetargów szukasz
@@ -321,42 +446,32 @@ export function RegisterPage() {
               <p className="mt-1 text-xs text-text-muted-light">*Opcjonalne</p>
             </div>
 
-            {/* Checkboxes */}
             <div className="space-y-3">
-              <label className="flex items-start gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  name="searchAllPoland"
-                  checked={formData.searchAllPoland}
-                  onChange={handleChange}
-                  className="mt-1 w-5 h-5 border-2 border-border-light rounded focus:ring-2 focus:ring-primary text-primary cursor-pointer"
-                />
-                <span className="text-sm text-text-main-light group-hover:text-primary transition-colors">
-                  Szukam przetargów w całej Polsce
-                </span>
-              </label>
 
-              <label className="flex items-start gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  name="privacyConsent"
-                  required
-                  checked={formData.privacyConsent}
-                  onChange={handleChange}
-                  className="mt-1 w-5 h-5 border-2 border-border-light rounded focus:ring-2 focus:ring-primary text-primary cursor-pointer"
-                />
-                <span className="text-sm text-text-main-light">
-                  Potwierdzam, że administratorem moich danych osobowych jest TenderAI (zgodnie z Polityką Prywatności) oraz że moje dane będą przetwarzane w celu rejestracji, kontaktu i obsługi zapytania. Zapoznałem(-am) się z{' '}
-                  <a href="#" className="text-primary hover:underline">
-                    Polityką Prywatności
-                  </a>
-                  . *
-                </span>
-              </label>
+              <div>
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    name="privacyConsent"
+                    checked={formData.privacyConsent}
+                    onChange={handleChange}
+                    className={`mt-1 w-5 h-5 border-2 rounded focus:ring-2 focus:ring-primary text-primary cursor-pointer ${
+                      fieldErrors.privacyConsent ? 'border-red-400' : 'border-border-light'
+                    }`}
+                  />
+                  <span className="text-sm text-text-main-light">
+                    Potwierdzam, że administratorem moich danych osobowych jest TenderAI (zgodnie z Polityką Prywatności) oraz że moje dane będą przetwarzane w celu rejestracji, kontaktu i obsługi zapytania. Zapoznałem(-am) się z{' '}
+                    <a href="#" className="text-primary hover:underline">
+                      Polityką Prywatności
+                    </a>
+                    . *
+                  </span>
+                </label>
+                <FieldError message={fieldErrors.privacyConsent} />
+              </div>
             </div>
           </div>
 
-          {/* Submit Button */}
           <Button
             type="submit"
             size="lg"
