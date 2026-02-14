@@ -1,8 +1,4 @@
-import type { Config } from 'tailwindcss'
-
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-} satisfies Config
+  // Tailwind v4 automatycznie skanuje pliki przez @tailwindcss/vite plugin
+  // Nie potrzeba już opcji 'content'
+};

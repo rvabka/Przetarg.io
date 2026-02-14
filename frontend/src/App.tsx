@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { AuthGuard } from './components/guards/AuthGuard'
 import { PageLayout } from './components/layout/PageLayout'
+import { DashboardLayout } from './components/layout/DashboardLayout'
 import { HomePage } from './pages/HomePage'
 import { FeaturesPage } from './pages/FeaturesPage'
 import { SolutionsPage } from './pages/SolutionsPage'
@@ -9,7 +11,13 @@ import { ResourcesPage } from './pages/ResourcesPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { VerifyEmailPage } from './pages/VerifyEmailPage'
-import { DashboardPage } from './pages/DashboardPage'
+import { MyTendersPage } from './pages/dashboard/MyTendersPage'
+import { GlobalSearchPage } from './pages/dashboard/GlobalSearchPage'
+import { NotificationsPage } from './pages/dashboard/NotificationsPage'
+import { CpvSearchPage } from './pages/dashboard/CpvSearchPage'
+import { CompanyProfilePage } from './pages/dashboard/CompanyProfilePage'
+import { SettingsPage } from './pages/dashboard/SettingsPage'
+import { OnboardingPage } from './pages/dashboard/OnboardingPage'
 
 function App() {
   return (
@@ -21,10 +29,27 @@ function App() {
           <Route path="/zarejestruj" element={<RegisterPage />} />
           <Route path="/potwierdz-email" element={<VerifyEmailPage />} />
 
-          {/* Main Routes */}
+          {/* Dashboard Routes (protected) */}
+          <Route
+            path="/dashboard"
+            element={
+              <AuthGuard>
+                <DashboardLayout />
+              </AuthGuard>
+            }
+          >
+            <Route index element={<MyTendersPage />} />
+            <Route path="szukaj" element={<GlobalSearchPage />} />
+            <Route path="powiadomienia" element={<NotificationsPage />} />
+            <Route path="cpv" element={<CpvSearchPage />} />
+            <Route path="firma" element={<CompanyProfilePage />} />
+            <Route path="ustawienia" element={<SettingsPage />} />
+            <Route path="onboarding" element={<OnboardingPage />} />
+          </Route>
+
+          {/* Landing / Public Routes */}
           <Route path="/" element={<PageLayout />}>
             <Route index element={<HomePage />} />
-            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="funkcje" element={<FeaturesPage />} />
             <Route path="rozwiazania" element={<SolutionsPage />} />
             <Route path="cennik" element={<PricingPage />} />

@@ -93,7 +93,7 @@ export function StatisticsSection() {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         >
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-[800] mb-4 sm:mb-6 text-text-main-light leading-tight">
-            Dlaczego zespoły zakupowe wybierają TenderAI
+            Dlaczego zespoły zakupowe wybierają Przetargo
           </h2>
           <p className="text-sm sm:text-base lg:text-lg text-text-muted-light font-medium">
             Automatyzujemy żmudne części procesu RFP, abyś mógł skupić się na

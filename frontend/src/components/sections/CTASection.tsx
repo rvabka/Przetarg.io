@@ -1,4 +1,4 @@
-import { Button } from '../ui/Button'
+import { Button } from '../ui/Button';
 
 export function CTASection() {
   return (
@@ -7,7 +7,8 @@ export function CTASection() {
       <div
         className="absolute inset-0 opacity-10 pointer-events-none"
         style={{
-          backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)',
+          backgroundImage:
+            'radial-gradient(circle, #ffffff 1px, transparent 1px)',
           backgroundSize: '30px 30px'
         }}
       ></div>
@@ -20,24 +21,26 @@ export function CTASection() {
           proces ofertowania?
         </h2>
         <p className="text-2xl text-white/90 mb-12 font-medium max-w-2xl mx-auto">
-          Dołącz do ponad 500 firm myślących przyszłościowo, które wygrywają więcej zleceń dzięki TenderAI.
+          Dołącz do ponad 500 firm myślących przyszłościowo, które wygrywają
+          więcej zleceń dzięki Przetargo.
         </p>
         <div className="flex flex-col sm:flex-row justify-center gap-6">
           <Button
             size="lg"
-            className="bg-white text-primary hover:bg-gray-100 shadow-2xl transform hover:-translate-y-1"
+            variant="secondary"
+            className="bg-white! text-primary hover:bg-gray-100! shadow-2xl hover:-translate-y-1 transition-transform duration-300"
           >
             Rozpocznij darmowy okres próbny
           </Button>
           <Button
             size="lg"
             variant="outline"
-            className="bg-transparent border-2 border-white/30 backdrop-blur-sm text-white hover:bg-white/10 transform hover:-translate-y-1"
+            className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:-translate-y-1 transition-transform duration-300"
           >
             Porozmawiaj ze sprzedażą
           </Button>
         </div>
       </div>
     </section>
-  )
+  );
 }

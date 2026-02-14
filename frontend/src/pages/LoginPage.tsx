@@ -96,7 +96,7 @@ export function LoginPage() {
               T
             </div>
             <span className="font-bold text-2xl tracking-tight text-text-main-light">
-              TenderAI
+              Przetargo
             </span>
           </Link>
           <h2 className="mt-6 text-3xl font-bold text-text-main-light">

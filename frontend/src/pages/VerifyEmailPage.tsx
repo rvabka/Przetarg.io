@@ -24,7 +24,7 @@ export function VerifyEmailPage() {
             T
           </div>
           <span className="font-bold text-2xl tracking-tight text-text-main-light">
-            TenderAI
+            Przetargo
           </span>
         </Link>
 

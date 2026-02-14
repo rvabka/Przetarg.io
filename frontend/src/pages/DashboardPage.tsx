@@ -22,7 +22,7 @@ export function DashboardPage() {
               Witaj, {profile?.first_name}! 👋
             </h1>
             <p className="text-text-muted-light">
-              Cieszymy się, że jesteś z nami w TenderAI
+              Cieszymy się, że jesteś z nami w Przetargo
             </p>
           </div>
 
@@ -191,7 +191,7 @@ export function DashboardPage() {
             className="bg-white rounded-xl p-8 border border-border-light"
           >
             <h2 className="text-2xl font-bold text-text-main-light mb-6">
-              Zacznij korzystać z TenderAI
+              Zacznij korzystać z Przetargo
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

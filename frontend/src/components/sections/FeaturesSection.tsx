@@ -77,7 +77,7 @@ export function FeaturesSection() {
                 <div className="w-3.5 h-3.5 rounded-full bg-green-400"></div>
               </div>
               <div className="ml-6 bg-white rounded-md px-4 py-1.5 text-xs text-text-muted-light flex-1 max-w-lg border border-border-light text-center font-mono">
-                app.tenderai.com/project/rfp-2023-enterprise/analysis
+                app.przetargo.pl/project/rfp-2023-enterprise/analysis
               </div>
             </div>
 

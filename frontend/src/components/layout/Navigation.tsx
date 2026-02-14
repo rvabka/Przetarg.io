@@ -63,7 +63,7 @@ export function Navigation() {
                 T
               </div>
               <span className="font-bold text-xl tracking-tight text-text-main-light">
-                TenderAI
+                Przetargo
               </span>
             </Link>
 
@@ -90,7 +90,9 @@ export function Navigation() {
                     to="/dashboard"
                     className="hidden md:inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
                   >
-                    <span className="material-symbols-outlined text-lg">dashboard</span>
+                    <span className="material-symbols-outlined text-lg">
+                      dashboard
+                    </span>
                     Dashboard
                   </Link>
                   <div className="hidden md:block relative profile-menu-container">
@@ -196,7 +198,7 @@ export function Navigation() {
                     Zaloguj się
                   </Link>
                   <Link to="/zarejestruj">
-                    <Button size="md" className="hidden md:inline-flex">
+                    <Button size="default" className="hidden md:inline-flex">
                       Rozpocznij
                     </Button>
                   </Link>
@@ -335,9 +337,7 @@ export function Navigation() {
                       <span className="material-symbols-outlined text-xl">
                         dashboard
                       </span>
-                      <span className="text-base font-semibold">
-                        Dashboard
-                      </span>
+                      <span className="text-base font-semibold">Dashboard</span>
                     </Link>
                     <Link
                       to="/profil"

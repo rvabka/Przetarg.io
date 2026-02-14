@@ -11,7 +11,7 @@ import 'swiper/swiper-bundle.css';
 const testimonials = [
   {
     rating: 5,
-    text: 'Narzędzie bezbłędnie wychwytuje niuanse prawne. To jak dodatkowy zespół ekspertów dostępny 24/7. Odkąd korzystamy z TenderAI, nasza skuteczność wzrosła dwukrotnie.',
+    text: 'Narzędzie bezbłędnie wychwytuje niuanse prawne. To jak dodatkowy zespół ekspertów dostępny 24/7. Odkąd korzystamy z Przetargo, nasza skuteczność wzrosła dwukrotnie.',
     author: 'Anna Nowicka',
     role: 'Head of Legal @ TechFlow',
     avatar:
@@ -35,7 +35,7 @@ const testimonials = [
   },
   {
     rating: 4.8,
-    text: 'Wreszcie system, który naprawdę rozumie specyfikę polskich przetargów publicznych. Współpraca z TenderAI to game changer.',
+    text: 'Wreszcie system, który naprawdę rozumie specyfikę polskich przetargów publicznych. Współpraca z Przetargo to game changer.',
     author: 'Katarzyna Nowak',
     role: 'Kierownik Działu Ofert @ PolBuild',
     avatar:

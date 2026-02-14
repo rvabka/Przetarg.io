@@ -211,7 +211,7 @@ export function RegisterPage() {
               T
             </div>
             <span className="font-bold text-2xl tracking-tight text-text-main-light">
-              TenderAI
+              Przetargo
             </span>
           </Link>
           <h2 className="mt-6 text-3xl font-bold text-text-main-light">
@@ -460,7 +460,7 @@ export function RegisterPage() {
                     }`}
                   />
                   <span className="text-sm text-text-main-light">
-                    Potwierdzam, że administratorem moich danych osobowych jest TenderAI (zgodnie z Polityką Prywatności) oraz że moje dane będą przetwarzane w celu rejestracji, kontaktu i obsługi zapytania. Zapoznałem(-am) się z{' '}
+                    Potwierdzam, że administratorem moich danych osobowych jest Przetargo (zgodnie z Polityką Prywatności) oraz że moje dane będą przetwarzane w celu rejestracji, kontaktu i obsługi zapytania. Zapoznałem(-am) się z{' '}
                     <a href="#" className="text-primary hover:underline">
                       Polityką Prywatności
                     </a>

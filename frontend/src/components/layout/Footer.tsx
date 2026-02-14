@@ -26,7 +26,7 @@ export function Footer() {
                 T
               </div>
               <span className="font-bold text-2xl tracking-tight text-text-main-light">
-                TenderAI
+                Przetargo
               </span>
             </div>
             <p className="text-text-muted-light max-w-sm mb-8 text-base font-medium leading-relaxed">
@@ -112,7 +112,7 @@ export function Footer() {
         {/* Bottom Section */}
         <div className="border-t border-border-light pt-10 flex flex-col md:flex-row justify-between items-center gap-6">
           <p className="text-sm text-text-muted-light font-medium">
-            © 2024 TenderAI Inc. Wszelkie prawa zastrzeżone.
+            © 2024 Przetargo Inc. Wszelkie prawa zastrzeżone.
           </p>
           <div className="flex gap-8 text-sm text-text-muted-light font-medium">
             <a href="#" className="hover:text-primary transition-colors">
