@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useInView } from '../../hooks/useInView';
-import { Card } from '../ui/Card';
+import { Card } from '../ui/card';
 
 const stats = [
   {
@@ -114,9 +114,7 @@ export function StatisticsSection() {
               }}
             >
               <Card
-                variant="elevated"
-                hoverable
-                className="p-4 sm:p-6 lg:p-8 text-center flex flex-col items-center justify-center min-h-[160px] sm:min-h-[180px] lg:min-h-[220px]"
+                className="p-4 sm:p-6 lg:p-8 text-center flex flex-col items-center justify-center min-h-[160px] sm:min-h-[180px] lg:min-h-[220px] shadow-md hover:shadow-lg transition-shadow"
               >
                 <div className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-primary mb-2 sm:mb-3 lg:mb-4 group-hover:scale-110 transition-transform inline-block">
                   <CountUp

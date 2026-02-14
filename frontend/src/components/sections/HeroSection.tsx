@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { GlowSpot } from '../ui/GlowSpot';
-import { Input } from '../ui/Input';
-import { Button } from '../ui/Button';
+import { GlowSpot } from '../ui/glow-spot';
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
 import { BrandLogos } from '../features/BrandLogos';
 
 // Split text into words, preserving spaces
@@ -146,14 +146,12 @@ export function HeroSection() {
               <Input
                 type="email"
                 placeholder="Twój adres e-mail"
-                icon="mail"
                 required
                 className="py-3"
               />
               <Button
                 variant="secondary"
-                size="md"
-                icon="arrow_forward"
+                size="default"
                 type="button"
               >
                 Rozpocznij

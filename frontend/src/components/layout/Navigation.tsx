@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button } from '../ui/Button';
+import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 
 export function Navigation() {

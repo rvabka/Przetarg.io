@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useInView } from '../../hooks/useInView';
-import { Icon } from '../ui/Icon';
+import { Icon } from '../ui/icon';
 
 const steps = [
   {

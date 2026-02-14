@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from '../../hooks/useInView';
 import { IndustryCard } from '../features/IndustryCard';
-import { GlowSpot } from '../ui/GlowSpot';
+import { GlowSpot } from '../ui/glow-spot';
 
 // Each card reveals from a different edge — diagonal polygon wipe
 const cardReveals = [

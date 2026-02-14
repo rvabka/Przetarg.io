@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from '../../hooks/useInView';
-import { GlowSpot } from '../ui/GlowSpot';
-import { Icon } from '../ui/Icon';
+import { GlowSpot } from '../ui/glow-spot';
+import { Icon } from '../ui/icon';
 import { IPhone3D } from '../mobile/IPhone3D';
 import { MobileScreen } from '../mobile/MobileScreen';
 

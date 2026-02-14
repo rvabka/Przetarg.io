@@ -1,4 +1,4 @@
-import { Badge } from '../ui/Badge';
+import { Badge } from '../ui/badge';
 
 interface ComplianceItem {
   title: string;
@@ -56,7 +56,7 @@ export function ComplianceChecklist() {
             <span className="text-base font-bold text-text-main-light">
               {item.title}
             </span>
-            <Badge status={item.status} size="md" icon={item.statusIcon}>
+            <Badge variant={item.status === 'success' ? 'success' : 'warning'} size="default">
               {item.statusLabel}
             </Badge>
           </div>

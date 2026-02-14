@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/Button';
+import { Button } from '../components/ui/button';
 
 export function DashboardPage() {
   const { user, profile } = useAuth();

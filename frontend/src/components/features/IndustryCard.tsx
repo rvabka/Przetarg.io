@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../utils/cn';
-import { Icon } from '../ui/Icon';
+import { Icon } from '../ui/icon';
 
 interface IndustryCardProps {
   image: string;

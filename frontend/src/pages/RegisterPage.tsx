@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { XCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Button } from '../components/ui/Button';
+import { Button } from '../components/ui/button';
 
 interface FieldErrors {
   email?: string;

@@ -2,8 +2,8 @@ import { useRef } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination, Navigation } from 'swiper/modules';
 import type { Swiper as SwiperType } from 'swiper';
-import { GlowSpot } from '../ui/GlowSpot';
-import { Icon } from '../ui/Icon';
+import { GlowSpot } from '../ui/glow-spot';
+import { Icon } from '../ui/icon';
 
 // Swiper styles
 import 'swiper/swiper-bundle.css';

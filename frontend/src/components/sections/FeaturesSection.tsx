@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { useInView } from '../../hooks/useInView';
-import { GlowSpot } from '../ui/GlowSpot';
+import { GlowSpot } from '../ui/glow-spot';
 import { ComplianceChecklist } from '../features/ComplianceChecklist';
 import { PDFViewer } from '../features/PDFViewer';
-import { Badge } from '../ui/Badge';
+import { Badge } from '../ui/badge';
 
 export function FeaturesSection() {
   const { ref: sectionRef, isInView } = useInView({ threshold: 0.2 });
@@ -103,7 +103,7 @@ export function FeaturesSection() {
                     </span>
                     Lista Kontrolna Zgodności
                   </h3>
-                  <Badge status="success" size="md">
+                  <Badge variant="success" size="default">
                     98% Zgodności
                   </Badge>
                 </div>
