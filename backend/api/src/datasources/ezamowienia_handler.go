@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// EzamowieniaQuery represents the query parameters for fetching tenders.
+type EzamowieniaQuery struct {
+	DateFrom string `query:"date_from" validate:"required,datetime=2006-01-02"`
+	DateTo   string `query:"date_to" validate:"required,datetime=2006-01-02"`
+}
+
 // EzamowieniaHandler acts as a relay for the Ezamowienia API.
 type EzamowieniaHandler struct {
 	BaseURL string
