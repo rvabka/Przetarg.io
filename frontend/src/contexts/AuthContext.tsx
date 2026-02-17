@@ -12,6 +12,14 @@ interface UserProfile {
   website: string;
   company_size: string;
   tender_description?: string;
+  position?: string;
+  language?: string;
+  search_all_poland?: boolean;
+  preferred_voivodeships?: string[];
+  keywords?: string[];
+  negative_keywords?: string;
+  email_daily_report?: boolean;
+  email_high_match_alerts?: boolean;
   created_at?: string;
 }
 

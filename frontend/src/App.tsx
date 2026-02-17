@@ -18,11 +18,13 @@ import { CpvSearchPage } from './pages/dashboard/CpvSearchPage'
 import { CompanyProfilePage } from './pages/dashboard/CompanyProfilePage'
 import { SettingsPage } from './pages/dashboard/SettingsPage'
 import { OnboardingPage } from './pages/dashboard/OnboardingPage'
+import { ToastProvider } from './components/ui/toast'
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+      <ToastProvider position="bottom-right">
         <Routes>
           {/* Auth Routes */}
           <Route path="/zaloguj" element={<LoginPage />} />
@@ -57,6 +59,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
+      </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   )

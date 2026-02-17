@@ -15,7 +15,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   website TEXT,
   company_size TEXT,
   tender_description TEXT,
+  position TEXT,
+  language TEXT DEFAULT 'pl',
   search_all_poland BOOLEAN DEFAULT false,
+  preferred_voivodeships TEXT[] DEFAULT '{}',
+  keywords TEXT[] DEFAULT '{}',
+  negative_keywords TEXT,
+  email_daily_report BOOLEAN DEFAULT true,
+  email_high_match_alerts BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
