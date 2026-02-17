@@ -8,68 +8,41 @@ export interface CpvNode {
   description: string
   children: CpvNode[]
   level: number
+  /** Pre-lowercased code + description for fast filtering */
+  _searchText: string
 }
 
-/**
- * Returns the numeric part of a CPV code (before the dash).
- * e.g. "45210000-2" -> "45210000"
- */
 function numericPart(code: string): string {
   return code.split('-')[0]
 }
 
-/**
- * Determines the hierarchy level based on trailing zeros.
- * XX000000 = 0 (Division)
- * XXXX0000 = 1 (Group)
- * XXXXXX00 = 2 (Class)
- * XXXXXXXX = 3 (Category / leaf)
- */
 function getLevel(code: string): number {
   const num = numericPart(code)
-  if (num.endsWith('000000')) return 0
-  if (num.endsWith('0000')) return 1
-  if (num.endsWith('00')) return 2
-  return 3
+  let trailingZeros = 0
+  for (let i = num.length - 1; i >= 0; i--) {
+    if (num[i] === '0') trailingZeros++
+    else break
+  }
+  return 6 - trailingZeros
 }
 
-/**
- * Finds the parent code by replacing trailing non-zero pairs with zeros.
- * e.g. 45210000-2 -> parent is 45200000-X (level 1)
- *      45200000-9 -> parent is 45000000-X (level 0)
- */
 function getParentNumeric(code: string): string | null {
   const num = numericPart(code)
-  const level = getLevel(code)
-  if (level === 0) return null
-
-  // Replace the relevant digits with zeros
-  const chars = num.split('')
-  if (level === 1) {
-    // XXXX0000 -> XX000000
-    chars[2] = '0'
-    chars[3] = '0'
-  } else if (level === 2) {
-    // XXXXXX00 -> XXXX0000
-    chars[4] = '0'
-    chars[5] = '0'
-  } else {
-    // XXXXXXXX -> XXXXXX00
-    chars[6] = '0'
-    chars[7] = '0'
+  let trailingZeros = 0
+  for (let i = num.length - 1; i >= 0; i--) {
+    if (num[i] === '0') trailingZeros++
+    else break
   }
+  if (trailingZeros >= 6) return null
+  const lastSigPos = num.length - 1 - trailingZeros
+  const chars = num.split('')
+  chars[lastSigPos] = '0'
   return chars.join('')
 }
 
-/**
- * Builds a tree structure from flat CPV data.
- * Returns only root nodes (level 0), with children nested.
- */
 export function buildCpvTree(data: CpvRawEntry[]): CpvNode[] {
-  // Index all entries by their numeric part for fast parent lookup
   const nodeMap = new Map<string, CpvNode>()
 
-  // Create nodes
   for (const entry of data) {
     const num = numericPart(entry.code)
     nodeMap.set(num, {
@@ -77,12 +50,12 @@ export function buildCpvTree(data: CpvRawEntry[]): CpvNode[] {
       description: entry.description,
       children: [],
       level: getLevel(entry.code),
+      _searchText: (entry.code + ' ' + entry.description).toLowerCase(),
     })
   }
 
   const roots: CpvNode[] = []
 
-  // Build parent-child relationships
   for (const entry of data) {
     const num = numericPart(entry.code)
     const node = nodeMap.get(num)!
@@ -95,8 +68,29 @@ export function buildCpvTree(data: CpvRawEntry[]): CpvNode[] {
       if (parent) {
         parent.children.push(node)
       } else {
-        // Orphan - push as root
-        roots.push(node)
+        let ancestorNum = parentNum
+        let found = false
+        while (ancestorNum) {
+          let tz = 0
+          for (let i = ancestorNum.length - 1; i >= 0; i--) {
+            if (ancestorNum[i] === '0') tz++
+            else break
+          }
+          if (tz >= 6) break
+          const pos = ancestorNum.length - 1 - tz
+          const chars = ancestorNum.split('')
+          chars[pos] = '0'
+          ancestorNum = chars.join('')
+          const ancestor = nodeMap.get(ancestorNum)
+          if (ancestor) {
+            ancestor.children.push(node)
+            found = true
+            break
+          }
+        }
+        if (!found) {
+          roots.push(node)
+        }
       }
     }
   }
@@ -105,93 +99,47 @@ export function buildCpvTree(data: CpvRawEntry[]): CpvNode[] {
 }
 
 /**
- * Filters the tree to only include nodes matching the query.
- * A node is included if it matches OR any of its descendants match.
- * Returns a new tree (does not mutate original).
+ * Combined filter + expand in a single tree walk.
+ * Returns { tree: filtered tree, expanded: set of codes to auto-expand }.
  */
-export function filterTree(roots: CpvNode[], query: string): CpvNode[] {
+export function filterTreeWithExpanded(
+  roots: CpvNode[],
+  query: string
+): { tree: CpvNode[]; expanded: Set<string> } {
   const q = query.toLowerCase().trim()
-  if (!q) return roots
+  if (!q) return { tree: roots, expanded: new Set() }
 
-  function matches(node: CpvNode): boolean {
-    return (
-      node.code.toLowerCase().includes(q) ||
-      node.description.toLowerCase().includes(q)
-    )
-  }
+  const expanded = new Set<string>()
 
-  function filterNode(node: CpvNode): CpvNode | null {
-    const filteredChildren = node.children
-      .map(filterNode)
-      .filter((n): n is CpvNode => n !== null)
+  function walkNode(node: CpvNode): CpvNode | null {
+    const selfMatches = node._searchText.includes(q)
 
-    if (matches(node) || filteredChildren.length > 0) {
-      return {
-        ...node,
-        children: filteredChildren.length > 0 ? filteredChildren : node.children.filter(matches).length > 0 ? filteredChildren : matches(node) ? node.children : filteredChildren,
-      }
-    }
-    return null
-  }
-
-  // Simpler approach: if the node itself matches, show it with all children.
-  // If only children match, show the path to them.
-  function filterNodeSimple(node: CpvNode): CpvNode | null {
-    if (matches(node)) {
-      // Node matches - include it with all its children
+    if (selfMatches) {
+      // Node matches — include it with ALL children (no further filtering needed)
       return node
     }
 
-    // Check if any descendant matches
-    const filteredChildren = node.children
-      .map(filterNodeSimple)
-      .filter((n): n is CpvNode => n !== null)
+    // Check descendants
+    const filteredChildren: CpvNode[] = []
+    for (const child of node.children) {
+      const result = walkNode(child)
+      if (result) filteredChildren.push(result)
+    }
 
     if (filteredChildren.length > 0) {
+      // Has matching descendants — auto-expand this node
+      expanded.add(node.code)
       return { ...node, children: filteredChildren }
     }
 
     return null
   }
 
-  return roots
-    .map(filterNodeSimple)
-    .filter((n): n is CpvNode => n !== null)
-}
-
-/**
- * Collects all codes that should be auto-expanded when showing search results.
- * Returns the set of codes for nodes that have matching descendants.
- */
-export function getExpandedCodesForFilter(roots: CpvNode[], query: string): Set<string> {
-  const q = query.toLowerCase().trim()
-  if (!q) return new Set()
-
-  const expanded = new Set<string>()
-
-  function matches(node: CpvNode): boolean {
-    return (
-      node.code.toLowerCase().includes(q) ||
-      node.description.toLowerCase().includes(q)
-    )
-  }
-
-  function walk(node: CpvNode): boolean {
-    let hasMatchingDescendant = false
-    for (const child of node.children) {
-      if (walk(child) || matches(child)) {
-        hasMatchingDescendant = true
-      }
-    }
-    if (hasMatchingDescendant) {
-      expanded.add(node.code)
-    }
-    return hasMatchingDescendant
-  }
-
+  const tree: CpvNode[] = []
   for (const root of roots) {
-    walk(root)
+    const result = walkNode(root)
+    if (result) tree.push(result)
   }
 
-  return expanded
+  return { tree, expanded }
 }

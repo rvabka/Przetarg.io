@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback, memo } from 'react'
+import { useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 import { Search, ChevronRight, ChevronDown, X, Check, Sparkles, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { buildCpvTree, filterTree, getExpandedCodesForFilter, type CpvNode } from '@/lib/cpv-tree'
+import { buildCpvTree, filterTreeWithExpanded, type CpvNode } from '@/lib/cpv-tree'
 import { useCpvSearch } from '@/hooks/useCpvSearch'
 import { toastManager } from '@/components/ui/toast'
 import cpvData from '@/data/cpv-2008.json'
@@ -41,12 +41,12 @@ const TreeNode = memo(function TreeNode({
   return (
     <div className="flex flex-col">
       <div
-        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer group transition-colors ${
+        className={`flex items-center gap-2 p-2 rounded-md cursor-pointer group transition-all duration-150 border ${
           isSelected
-            ? 'bg-emerald-50/60 border border-emerald-100/50'
+            ? 'bg-emerald-50/60 border-emerald-100/50'
             : isHighlighted
-              ? 'bg-amber-50/60 border border-amber-100/50'
-              : 'hover:bg-gray-50'
+              ? 'bg-amber-50/60 border-amber-100/50'
+              : 'border-transparent hover:bg-slate-100/70 hover:border-slate-200/60 hover:shadow-[0_1px_3px_rgba(0,0,0,0.04)]'
         }`}
         onClick={() => {
           if (hasChildren) onToggleExpand(node.code)
@@ -129,15 +129,12 @@ export function CpvSearchPage() {
 
   const { results: aiResults, isLoading: aiLoading, error: aiError, search: aiSearch, clearResults } = useCpvSearch()
 
-  const filteredTree = useMemo(() => {
-    if (useAiSearch || !searchQuery.trim()) return cpvTree
-    return filterTree(cpvTree, searchQuery)
-  }, [searchQuery, useAiSearch])
+  const deferredQuery = useDeferredValue(searchQuery)
 
-  const filterExpandedCodes = useMemo(() => {
-    if (!searchQuery.trim() || useAiSearch) return new Set<string>()
-    return getExpandedCodesForFilter(cpvTree, searchQuery)
-  }, [searchQuery, useAiSearch])
+  const { tree: filteredTree, expanded: filterExpandedCodes } = useMemo(() => {
+    if (useAiSearch || !deferredQuery.trim()) return { tree: cpvTree, expanded: new Set<string>() }
+    return filterTreeWithExpanded(cpvTree, deferredQuery)
+  }, [deferredQuery, useAiSearch])
 
   const effectiveExpanded = useMemo(() => {
     const merged = new Set(expandedCodes)
@@ -213,25 +210,36 @@ export function CpvSearchPage() {
     })
   }, [searchQuery, aiSearch, clearResults])
 
+  const cpvCodeMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const entry of cpvData) {
+      map.set(entry.code.split('-')[0], entry.code)
+    }
+    return map
+  }, [])
+
   const aiExpandedCodes = useMemo(() => {
     if (!useAiSearch || aiResults.length === 0) return new Set<string>()
     const codes = new Set<string>()
     for (const result of aiResults) {
-      const num = result.cpv_code.split('-')[0]
-      if (num.length === 8) {
-        const div = num.slice(0, 2) + '000000'
-        const group = num.slice(0, 4) + '0000'
-        const cls = num.slice(0, 6) + '00'
-        for (const entry of cpvData) {
-          const entryNum = entry.code.split('-')[0]
-          if (entryNum === div || entryNum === group || entryNum === cls) {
-            codes.add(entry.code)
-          }
+      let num = result.cpv_code.split('-')[0]
+      while (num) {
+        let tz = 0
+        for (let i = num.length - 1; i >= 0; i--) {
+          if (num[i] === '0') tz++
+          else break
         }
+        if (tz >= 6) break
+        const pos = num.length - 1 - tz
+        const chars = num.split('')
+        chars[pos] = '0'
+        num = chars.join('')
+        const fullCode = cpvCodeMap.get(num)
+        if (fullCode) codes.add(fullCode)
       }
     }
     return codes
-  }, [aiResults, useAiSearch])
+  }, [aiResults, useAiSearch, cpvCodeMap])
 
   const allExpanded = useMemo(() => {
     const merged = new Set(effectiveExpanded)
@@ -240,6 +248,8 @@ export function CpvSearchPage() {
     }
     return merged
   }, [effectiveExpanded, aiExpandedCodes])
+
+  const isStale = deferredQuery !== searchQuery && !useAiSearch
 
   function shortDescription(desc: string, maxLen = 30): string {
     if (desc.length <= maxLen) return desc
@@ -260,6 +270,7 @@ export function CpvSearchPage() {
           </div>
         </div>
 
+        {/* Search bar */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -287,6 +298,7 @@ export function CpvSearchPage() {
           </Button>
         </div>
 
+        {/* AI search status */}
         {useAiSearch && (
           <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
             <Sparkles className="h-3 w-3 text-[#065F46]" />
@@ -309,7 +321,7 @@ export function CpvSearchPage() {
 
       <div className="flex-1 overflow-hidden bg-gray-50/30">
         <ScrollArea className="h-full">
-          <div className="p-6 space-y-0.5">
+          <div className={`p-6 space-y-0.5 transition-opacity duration-150 ${isStale ? 'opacity-60' : ''}`}>
             {useAiSearch && aiResults.length > 0 && (
               <div className="mb-4 p-4 rounded-lg border border-amber-200 bg-amber-50/50">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-amber-700 mb-3 flex items-center gap-1.5">
@@ -344,6 +356,7 @@ export function CpvSearchPage() {
               </div>
             )}
 
+            {/* Tree */}
             {filteredTree.map((node) => (
               <TreeNode
                 key={node.code}
