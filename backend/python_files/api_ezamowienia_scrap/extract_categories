@@ -1,0 +1,697 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Parser ogłoszeń BZP - wyciąga wszystkie pola z HTML ogłoszenia.
+Wczytuje html_bodies.json i generuje ustrukturyzowane dane.
+"""
+
+import json
+import re
+from bs4 import BeautifulSoup, NavigableString, Tag
+from collections import OrderedDict
+
+
+def load_html_bodies(filepath="html_bodies.json"):
+    """Wczytuje plik JSON z ciałami HTML."""
+    with open(filepath, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def clean_text(text):
+    """Czyści tekst z nadmiarowych białych znaków."""
+    if not text:
+        return ""
+    # Zamień non-breaking spaces i inne specjalne spacje
+    text = text.replace('\xa0', ' ').replace('\u00a0', ' ')
+    # Zamień wielokrotne spacje/nowe linie na pojedynczą spację
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+def extract_section_title(text):
+    """
+    Sprawdza czy tekst jest tytułem sekcji, np. 'SEKCJA I - ZAMAWIAJĄCY'.
+    Zwraca (numer_sekcji_rzymski, tytuł) lub None.
+    """
+    match = re.match(
+        r'^\s*SEKCJA\s+(I{1,3}|IV|V|VI{0,3}|IX|X)\s*[-–—]\s*(.+)',
+        text, re.IGNORECASE
+    )
+    if match:
+        return match.group(1).upper(), match.group(2).strip()
+    # Alternatywny format
+    match = re.match(
+        r'^\s*SEKCJA\s+(I{1,3}|IV|V|VI{0,3}|IX|X)\s*$',
+        text, re.IGNORECASE
+    )
+    if match:
+        return match.group(1).upper(), ""
+    return None
+
+
+def extract_field_number(text):
+    """
+    Wyciąga numer pola z tekstu, np. '1.1.)' z '1.1.) Rola zamawiającego'.
+    Zwraca (numer, reszta_tekstu) lub None.
+    """
+    match = re.match(r'^\s*(\d+\.\d+(?:\.\d+)?)\.\)\s*(.*)', text)
+    if match:
+        return match.group(1), match.group(2).strip()
+    return None
+
+
+def parse_notice_html(html_content):
+    """
+    Parsuje HTML ogłoszenia BZP i zwraca ustrukturyzowane dane.
+    
+    Zwraca OrderedDict z sekcjami, gdzie każda sekcja zawiera pola.
+    Struktura:
+    {
+        "SEKCJA I - ZAMAWIAJĄCY": OrderedDict({
+            "1.1": {"label": "Rola zamawiającego", "value": "..."},
+            "1.2": {"label": "Nazwa zamawiającego", "value": "..."},
+            ...
+        }),
+        ...
+    }
+    """
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    result = OrderedDict()
+    current_section_key = None
+    current_section_fields = None
+    
+    # Strategia: przejdź przez wszystkie elementy dokumentu sekwencyjnie
+    # Szukaj nagłówków sekcji i pól z numerami
+    
+    # Najpierw zbierz wszystkie "bloki" tekstu w kolejności
+    blocks = []
+    
+    def collect_blocks(element):
+        """Rekurencyjnie zbiera bloki tekstu z zachowaniem struktury."""
+        if isinstance(element, NavigableString):
+            text = str(element).strip()
+            if text:
+                blocks.append({"type": "text", "text": text, "element": element})
+            return
+        
+        if isinstance(element, Tag):
+            # Sprawdź czy to jest element blokowy
+            block_tags = {'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                         'table', 'tr', 'td', 'th', 'li', 'br', 'hr'}
+            
+            if element.name in block_tags:
+                # Zbierz pełny tekst tego bloku
+                full_text = clean_text(element.get_text())
+                if full_text:
+                    # Sprawdź klasy CSS dla kontekstu
+                    css_classes = element.get('class', [])
+                    blocks.append({
+                        "type": "block",
+                        "tag": element.name,
+                        "text": full_text,
+                        "classes": css_classes,
+                        "element": element
+                    })
+            else:
+                for child in element.children:
+                    collect_blocks(child)
+    
+    # Alternatywne podejście - bardziej bezpośrednie parsowanie
+    # Szukaj wzorców w strukturze HTML BZP
+    
+    # W HTML BZP struktura jest zazwyczaj:
+    # - div z klasą zawierającą "Section" lub podobną dla nagłówków sekcji
+    # - divy z polami zawierającymi bold z numerem pola
+    
+    # Podejście 1: Użyj regex na raw HTML, potem parsuj kontekst
+    # Podejście 2: Przejdź przez DOM i zbierz pary klucz-wartość
+    
+    # Przejdźmy przez DOM bardziej inteligentnie
+    all_text_blocks = []
+    
+    def walk_dom(node, depth=0):
+        """Przechodzi przez DOM i zbiera bloki tekstowe."""
+        if isinstance(node, NavigableString):
+            return
+        if not isinstance(node, Tag):
+            return
+        
+        # Sprawdź czy ten element ma bezpośredni tekst (nie w dzieci)
+        # i czy zawiera numerowane pole
+        
+        text = clean_text(node.get_text())
+        if not text:
+            return
+        
+        # Czy to jest kontener "liściowy" lub bliski liściowi?
+        # Heurystyka: jeśli element ma mało zagnieżdżonych tagów blokowych
+        child_block_tags = node.find_all(
+            ['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table'],
+            recursive=False
+        )
+        
+        if len(child_block_tags) > 0:
+            # Ma dzieci blokowe - zejdź głębiej
+            for child in node.children:
+                if isinstance(child, Tag):
+                    walk_dom(child, depth + 1)
+        else:
+            # To jest "liść" - dodaj do bloków
+            all_text_blocks.append({
+                "text": text,
+                "element": node,
+                "depth": depth,
+                "classes": node.get('class', []),
+                "tag": node.name
+            })
+    
+    walk_dom(soup)
+    
+    # Jeśli powyższe nie dało wyników, spróbuj inaczej
+    if not all_text_blocks:
+        # Fallback: zbierz wszystkie divy i p
+        for elem in soup.find_all(['div', 'p', 'span', 'td']):
+            text = clean_text(elem.get_text())
+            if text and not elem.find(['div', 'p', 'table']):
+                all_text_blocks.append({
+                    "text": text,
+                    "element": elem,
+                    "depth": 0,
+                    "classes": elem.get('class', []),
+                    "tag": elem.name
+                })
+    
+    # Teraz przetwórz bloki - ale mogą być duplikaty
+    # Deduplikacja: usuń bloki których tekst jest podzbiorem innego bloku
+    # Lepiej: przetwarzaj od razu
+    
+    # Alternatywne, prostsze podejście:
+    # Podziel cały tekst dokumentu na linie i parsuj sekwencyjnie
+    
+    return parse_by_text_analysis(soup)
+
+
+def parse_by_text_analysis(soup):
+    """
+    Parsuje HTML analizując tekst i strukturę DOM.
+    Szuka wzorców numerów pól (X.Y.) i X.Y.Z.) oraz nagłówków sekcji.
+    """
+    result = OrderedDict()
+    
+    # Zbierz wszystkie elementy które mogą zawierać pola
+    # Strategia: znajdź wszystkie elementy <b> lub <strong> z numerami pól
+    
+    # Najpierw znajdź nagłówki sekcji
+    section_elements = []
+    for elem in soup.find_all(True):
+        text = clean_text(elem.get_text())
+        if text and re.match(r'^\s*SEKCJA\s+[IVX]+\s*[-–—]', text):
+            # Sprawdź czy to jest "najwęższy" element z tym tekstem
+            children_with_same = [c for c in elem.find_all(True) 
+                                  if clean_text(c.get_text()) == text]
+            if not children_with_same:
+                section_elements.append(elem)
+    
+    # Znajdź elementy z numerami pól
+    field_pattern = re.compile(r'(\d+\.\d+(?:\.\d+)?)\.\)')
+    
+    # Zbierz wszystkie elementy tekstowe w kolejności dokumentu
+    # Użyjmy podejścia opartego na iteracji przez wszystkie tagi
+    
+    all_elements_in_order = []
+    
+    for elem in soup.descendants:
+        if isinstance(elem, Tag):
+            # Sprawdź czy to jest "liść" (nie ma dzieci-tagów blokowych)
+            has_block_children = bool(elem.find(
+                ['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'tr'],
+                recursive=False
+            ))
+            if not has_block_children:
+                text = clean_text(elem.get_text())
+                if text and len(text) > 1:
+                    all_elements_in_order.append({
+                        "text": text,
+                        "element": elem,
+                        "tag": elem.name,
+                        "classes": elem.get('class', [])
+                    })
+    
+    # Deduplikuj - zachowaj tylko "liście" unikalne
+    seen_texts = set()
+    unique_elements = []
+    for item in all_elements_in_order:
+        # Użyj pozycji elementu w dokumencie (sourceline) jeśli dostępne
+        key = (item["text"], id(item["element"]))
+        if item["text"] not in seen_texts:
+            seen_texts.add(item["text"])
+            unique_elements.append(item)
+        elif item["text"] in seen_texts:
+            # Tekst duplikat - ale może to inny kontekst
+            # Sprawdź czy element jest przodkiem już dodanego
+            pass
+    
+    # Przejdźmy do prostszego podejścia - parsuj pełny tekst
+    full_text = soup.get_text('\n')
+    return parse_full_text(full_text, soup)
+
+
+def parse_full_text(full_text, soup=None):
+    """
+    Parsuje pełny tekst ogłoszenia linia po linii.
+    """
+    result = OrderedDict()
+    
+    # Podziel na linie i oczyść
+    lines = full_text.split('\n')
+    lines = [clean_text(line) for line in lines]
+    lines = [line for line in lines if line]  # Usuń puste
+    
+    current_section = None
+    current_field_num = None
+    current_field_label = None
+    current_field_value_lines = []
+    
+    # Wzorce
+    section_pattern = re.compile(
+        r'^SEKCJA\s+(I{1,3}|IV|V|VI{0,3}|VII{0,3}|IX|X{1,3})\s*[-–—]\s*(.+)$',
+        re.IGNORECASE
+    )
+    # Wzorzec alternatywny - sekcja bez myślnika
+    section_pattern2 = re.compile(
+        r'^SEKCJA\s+(I{1,3}|IV|V|VI{0,3}|VII{0,3}|IX|X{1,3})\s*$',
+        re.IGNORECASE
+    )
+    # Numer pola na początku linii: X.Y.) lub X.Y.Z.)
+    field_pattern = re.compile(r'^(\d+\.\d+(?:\.\d+)?)\.\)\s*(.*)')
+    
+    # Wzorzec dla podkryteriów jak "Kryterium 1", "Kryterium 2"
+    criterion_pattern = re.compile(r'^Kryterium\s+(\d+)\s*$', re.IGNORECASE)
+    
+    # Wzorzec "Część X" dla zamówień w częściach
+    part_pattern = re.compile(r'^Część\s+(\d+)\s*$', re.IGNORECASE)
+    
+    def save_current_field():
+        nonlocal current_field_num, current_field_label, current_field_value_lines
+        if current_section is not None and current_field_num is not None:
+            section_data = result[current_section]["fields"]
+            value = ' '.join(current_field_value_lines).strip()
+            
+            # Jeśli pole już istnieje (np. powtórzone w częściach), dołącz
+            if current_field_num in section_data:
+                existing = section_data[current_field_num]
+                if isinstance(existing["value"], list):
+                    existing["value"].append(value)
+                else:
+                    existing["value"] = value  # nadpisz
+            else:
+                section_data[current_field_num] = {
+                    "label": current_field_label,
+                    "value": value
+                }
+            
+            current_field_num = None
+            current_field_label = None
+            current_field_value_lines = []
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
+        # Sprawdź czy to nagłówek sekcji
+        section_match = section_pattern.match(line)
+        if not section_match:
+            section_match = section_pattern2.match(line)
+        
+        if section_match:
+            # Zapisz poprzednie pole
+            save_current_field()
+            
+            section_num = section_match.group(1).upper()
+            section_title = section_match.group(2).strip() if section_match.lastindex >= 2 else ""
+            section_key = f"SEKCJA {section_num}"
+            if section_title:
+                section_key += f" - {section_title}"
+            
+            current_section = section_key
+            if current_section not in result:
+                result[current_section] = {
+                    "title": section_key,
+                    "fields": OrderedDict()
+                }
+            i += 1
+            continue
+        
+        # Sprawdź czy to numer pola
+        field_match = field_pattern.match(line)
+        if field_match:
+            # Zapisz poprzednie pole
+            save_current_field()
+            
+            field_num = field_match.group(1)
+            rest = field_match.group(2)
+            
+            # Etykieta i wartość mogą być w jednej linii oddzielone dwukropkiem
+            # lub wartość jest w następnej linii
+            if ':' in rest:
+                parts = rest.split(':', 1)
+                current_field_label = parts[0].strip()
+                value_part = parts[1].strip() if len(parts) > 1 else ""
+                current_field_value_lines = [value_part] if value_part else []
+            else:
+                current_field_label = rest
+                current_field_value_lines = []
+            
+            current_field_num = field_num
+            
+            if current_section is None:
+                # Pole przed pierwszą sekcją - utwórz sekcję domyślną
+                current_section = "NAGŁÓWEK"
+                result[current_section] = {
+                    "title": "NAGŁÓWEK",
+                    "fields": OrderedDict()
+                }
+            
+            i += 1
+            continue
+        
+        # Sprawdź kryterium
+        crit_match = criterion_pattern.match(line)
+        if crit_match:
+            save_current_field()
+            # Dodaj jako specjalny wpis
+            if current_section:
+                crit_num = crit_match.group(1)
+                crit_key = f"_kryterium_{crit_num}"
+                result[current_section]["fields"][crit_key] = {
+                    "label": f"Kryterium {crit_num}",
+                    "value": "",
+                    "type": "separator"
+                }
+            i += 1
+            continue
+        
+        # Sprawdź "Część X"
+        part_match = part_pattern.match(line)
+        if part_match:
+            save_current_field()
+            if current_section:
+                part_num = part_match.group(1)
+                part_key = f"_czesc_{part_num}"
+                result[current_section]["fields"][part_key] = {
+                    "label": f"Część {part_num}",
+                    "value": "",
+                    "type": "separator"
+                }
+            i += 1
+            continue
+        
+        # To jest kontynuacja wartości bieżącego pola
+        if current_field_num is not None:
+            current_field_value_lines.append(line)
+        
+        i += 1
+    
+    # Zapisz ostatnie pole
+    save_current_field()
+    
+    return result
+
+
+def format_output(parsed_data):
+    """
+    Formatuje sparsowane dane do czytelnego tekstu.
+    """
+    output_lines = []
+    
+    for section_key, section_data in parsed_data.items():
+        output_lines.append("")
+        output_lines.append("=" * 80)
+        output_lines.append(section_data["title"])
+        output_lines.append("=" * 80)
+        
+        for field_key, field_data in section_data["fields"].items():
+            if field_data.get("type") == "separator":
+                output_lines.append("")
+                output_lines.append(f"  --- {field_data['label']} ---")
+                continue
+            
+            label = field_data["label"]
+            value = field_data["value"]
+            
+            if isinstance(value, list):
+                value = ' | '.join(value)
+            
+            if field_key.startswith("_"):
+                output_lines.append(f"  {label}: {value}")
+            else:
+                field_display = f"{field_key}.)"
+                if value:
+                    output_lines.append(f"  {field_display} {label}: {value}")
+                else:
+                    output_lines.append(f"  {field_display} {label}:")
+    
+    return '\n'.join(output_lines)
+
+
+def format_output_json(parsed_data):
+    """
+    Konwertuje sparsowane dane do formatu JSON (serializowalnego).
+    """
+    output = OrderedDict()
+    
+    for section_key, section_data in parsed_data.items():
+        section_out = OrderedDict()
+        section_out["_title"] = section_data["title"]
+        
+        for field_key, field_data in section_data["fields"].items():
+            section_out[field_key] = {
+                "label": field_data["label"],
+                "value": field_data["value"]
+            }
+            if "type" in field_data:
+                section_out[field_key]["type"] = field_data["type"]
+        
+        output[section_key] = section_out
+    
+    return output
+
+
+def parse_html_advanced(html_content):
+    """
+    Zaawansowane parsowanie HTML z użyciem BeautifulSoup do lepszego
+    wyciągania wartości pól (szczególnie wieloliniowych).
+    """
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Najpierw zamień <br> na newline markers
+    for br in soup.find_all('br'):
+        br.replace_with('\n')
+    
+    # Szukaj elementów div które zawierają pola
+    # W BZP zwykle struktura to:
+    # <div class="divSection"> zawiera sekcję
+    # Wewnątrz są divy z polami
+    
+    # Spróbujmy podejścia hybrydowego:
+    # 1. Wyciągnij tekst z zachowaniem struktury bloków
+    # 2. Parsuj tekst
+    
+    # Zbierz bloki tekstu z zachowaniem separacji
+    text_blocks = []
+    
+    def extract_text_blocks(element, depth=0):
+        """Wyciąga bloki tekstu zachowując strukturę."""
+        if isinstance(element, NavigableString):
+            text = str(element).strip()
+            if text:
+                text_blocks.append(text)
+            return
+        
+        if isinstance(element, Tag):
+            if element.name in ['script', 'style']:
+                return
+            
+            is_block = element.name in [
+                'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                'table', 'tr', 'li', 'ul', 'ol', 'section', 'article'
+            ]
+            
+            if is_block:
+                text_blocks.append('\n')
+            
+            for child in element.children:
+                extract_text_blocks(child, depth + 1)
+            
+            if is_block:
+                text_blocks.append('\n')
+    
+    extract_text_blocks(soup)
+    
+    full_text = ''.join(text_blocks)
+    # Oczyść wielokrotne newline
+    full_text = re.sub(r'\n{3,}', '\n\n', full_text)
+    
+    return parse_full_text(full_text, soup)
+
+
+def process_all_notices(input_file="html_bodies.json", output_file="parsed_notices.json",
+                        text_output_file="parsed_notices.txt"):
+    """
+    Przetwarza wszystkie ogłoszenia z pliku JSON.
+    """
+    print(f"Wczytywanie pliku {input_file}...")
+    data = load_html_bodies(input_file)
+    
+    all_parsed = []
+    all_text_outputs = []
+    
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = list(data.values()) if not isinstance(list(data.values())[0], str) else [data]
+    else:
+        items = [data]
+    
+    for idx, item in enumerate(items):
+        # Wyciągnij HTML z elementu
+        if isinstance(item, dict):
+            html_content = item.get('html_body', item.get('html', item.get('body', '')))
+            notice_id = item.get('id', item.get('notice_id', f'notice_{idx}'))
+        elif isinstance(item, str):
+            html_content = item
+            notice_id = f'notice_{idx}'
+        else:
+            continue
+        
+        if not html_content:
+            print(f"  Pominięto {notice_id} - brak treści HTML")
+            continue
+        
+        print(f"  Parsowanie ogłoszenia {notice_id}...")
+        
+        # Parsuj
+        parsed = parse_html_advanced(html_content)
+        
+        # Formatuj tekst
+        text_output = format_output(parsed)
+        
+        # Formatuj JSON
+        json_output = format_output_json(parsed)
+        
+        all_parsed.append({
+            "notice_id": str(notice_id),
+            "parsed_data": json_output
+        })
+        
+        all_text_outputs.append(f"\n{'#' * 80}")
+        all_text_outputs.append(f"# OGŁOSZENIE: {notice_id}")
+        all_text_outputs.append(f"{'#' * 80}")
+        all_text_outputs.append(text_output)
+    
+    # Zapisz JSON
+    print(f"\nZapisywanie {output_file}...")
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(all_parsed, f, ensure_ascii=False, indent=2)
+    
+    # Zapisz tekst
+    print(f"Zapisywanie {text_output_file}...")
+    with open(text_output_file, "w", encoding="utf-8") as f:
+        f.write('\n'.join(all_text_outputs))
+    
+    print(f"\nPrzetworzono {len(all_parsed)} ogłoszeń.")
+    print(f"  JSON: {output_file}")
+    print(f"  Tekst: {text_output_file}")
+    
+    return all_parsed
+
+
+def parse_single_html(html_content):
+    """
+    Parsuje pojedynczy HTML i zwraca wynik.
+    Wygodna funkcja do użycia z zewnątrz.
+    """
+    parsed = parse_html_advanced(html_content)
+    return format_output_json(parsed)
+
+
+# ============================================================================
+# Dodatkowe narzędzia do analizy
+# ============================================================================
+
+def get_all_field_numbers(parsed_notices):
+    """
+    Zbiera wszystkie unikalne numery pól z przetworzonych ogłoszeń.
+    Przydatne do odkrywania pól które istnieją ale nie zostały wymienione.
+    """
+    all_fields = set()
+    
+    for notice in parsed_notices:
+        data = notice.get("parsed_data", {})
+        for section_key, section_data in data.items():
+            for field_key, field_data in section_data.items():
+                if field_key.startswith("_"):
+                    continue
+                all_fields.add(field_key)
+    
+    # Sortuj naturalnie
+    def sort_key(field_num):
+        parts = field_num.split('.')
+        return tuple(int(p) for p in parts)
+    
+    return sorted(all_fields, key=sort_key)
+
+
+def generate_field_coverage_report(parsed_notices):
+    """
+    Generuje raport pokrycia pól - które pola występują i jak często.
+    """
+    field_counts = {}
+    total_notices = len(parsed_notices)
+    
+    for notice in parsed_notices:
+        data = notice.get("parsed_data", {})
+        for section_key, section_data in data.items():
+            for field_key, field_data in section_data.items():
+                if field_key.startswith("_"):
+                    continue
+                label = field_data.get("label", "")
+                key = f"{field_key} - {label}"
+                if key not in field_counts:
+                    field_counts[key] = 0
+                field_counts[key] += 1
+    
+    print(f"\n{'=' * 80}")
+    print(f"RAPORT POKRYCIA PÓL ({total_notices} ogłoszeń)")
+    print(f"{'=' * 80}")
+    
+    def sort_key(item):
+        field_num = item[0].split(' - ')[0]
+        parts = field_num.split('.')
+        return tuple(int(p) for p in parts)
+    
+    for key, count in sorted(field_counts.items(), key=sort_key):
+        pct = count / total_notices * 100
+        bar = '█' * int(pct / 5) + '░' * (20 - int(pct / 5))
+        print(f"  {key:60s} {count:4d}/{total_notices} ({pct:5.1f}%) {bar}")
+
+
+if __name__ == "__main__":
+    import sys
+    
+    input_file = sys.argv[1] if len(sys.argv) > 1 else "html_bodies.json"
+    output_json = sys.argv[2] if len(sys.argv) > 2 else "parsed_notices.json"
+    output_txt = sys.argv[3] if len(sys.argv) > 3 else "parsed_notices.txt"
+    
+    parsed = process_all_notices(input_file, output_json, output_txt)
+    
+    if parsed:
+        # Raport pokrycia pól
+        generate_field_coverage_report(parsed)
+        
+        # Lista wszystkich znalezionych pól
+        all_fields = get_all_field_numbers(parsed)
+        print(f"\nWszystkie znalezione numery pól ({len(all_fields)}):")
+        for f in all_fields:
+            print(f"  {f}")

@@ -1,0 +1,4 @@
+Generic single-database configuration.
+
+dospermione to alembic, migracje jak w larevelu, pisze sie "alembic revision --autogenerate -m "create_notices_table" "
+i sie robi migracja
