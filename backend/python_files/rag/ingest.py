@@ -21,7 +21,7 @@ import lancedb
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
-from schema import CPVRecord, EMBEDDING_DIM, MODEL_NAME, TABLE_NAME
+from schema import CPV_SCHEMA, EMBEDDING_DIM, MODEL_NAME, TABLE_NAME
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -39,6 +39,56 @@ def load_cpv_data(path: Path) -> list[dict[str, str]]:
         sys.exit(f"[ERROR] No records found in {path}")
     print(f"[INFO]  Loaded {len(data):,} CPV records from {path}")
     return data
+
+
+# ---------------------------------------------------------------------------
+# CPV hierarchy enrichment
+# ---------------------------------------------------------------------------
+def _build_code_lookup(raw: list[dict[str, str]]) -> dict[str, str]:
+    """Map 8-digit base code (no check digit) → description."""
+    return {item["code"].split("-")[0]: item["description"] for item in raw}
+
+
+def _enrich_description(
+    code: str,
+    description: str,
+    lookup: dict[str, str],
+) -> str:
+    """Append ancestor category names AFTER the leaf description.
+
+    Leaf-first ordering ensures the model gives highest weight to the
+    specific item, while ancestors provide supporting context.
+
+    Example for 45262690 ("Remont starych budynków"):
+        "Remont starych budynków (Roboty wykończeniowe, [...] | Roboty budowlane)"
+    """
+    base = code.split("-")[0]  # e.g. "45262690"
+    ancestors: list[str] = []
+
+    for sig_digits in range(2, len(base)):
+        parent_base = base[:sig_digits] + "0" * (8 - sig_digits)
+        if parent_base != base and parent_base in lookup:
+            ancestors.append(lookup[parent_base])
+
+    if ancestors:
+        # Reverse: most specific ancestor first, broadest last
+        ancestors.reverse()
+        return description + " (" + " | ".join(ancestors) + ")"
+    return description
+
+
+def enrich_descriptions(
+    raw: list[dict[str, str]],
+) -> list[str]:
+    """Return enriched description for every record (same order as *raw*)."""
+    lookup = _build_code_lookup(raw)
+    enriched = [
+        _enrich_description(item["code"], item["description"], lookup)
+        for item in raw
+    ]
+    n_enriched = sum(1 for e, r in zip(enriched, raw) if e != r["description"])
+    print(f"[INFO]  Enriched {n_enriched:,}/{len(raw):,} descriptions with ancestors.")
+    return enriched
 
 
 def encode_descriptions(
@@ -78,27 +128,34 @@ def ingest(input_path: Path, db_path: str) -> None:
 
     # 1. Load raw data
     raw = load_cpv_data(input_path)
-    descriptions = [r["description"] for r in raw]
 
-    # 2. Load model & encode
+    # 2. Enrich descriptions with parent-category context
+    enriched = enrich_descriptions(raw)
+
+    # 3. Load model & encode ENRICHED descriptions (better embeddings)
     print(f"[INFO]  Loading model: {MODEL_NAME} …")
     model = SentenceTransformer(MODEL_NAME)
     assert model.get_sentence_embedding_dimension() == EMBEDDING_DIM, (
         f"Model dim mismatch: expected {EMBEDDING_DIM}, "
         f"got {model.get_sentence_embedding_dimension()}"
     )
-    vectors = encode_descriptions(model, descriptions)
+    vectors = encode_descriptions(model, enriched)
 
-    # 3. Write to LanceDB (overwrite if exists)
+    # 4. Write to LanceDB (overwrite if exists)
     print(f"[INFO]  Writing LanceDB table '{TABLE_NAME}' to {db_path} …")
     db = lancedb.connect(db_path)
     tbl = db.create_table(
         TABLE_NAME,
         data=build_records(raw, vectors),
-        schema=CPVRecord.to_arrow_schema(),
+        schema=CPV_SCHEMA,
         mode="overwrite",
     )
     print(f"[INFO]  Table rows: {tbl.count_rows():,}")
+
+    # 5. Create FTS index for hybrid search
+    print("[INFO]  Creating FTS index on 'description' …")
+    tbl.create_fts_index("description", replace=True)
+    print("[INFO]  FTS index created.")
 
     elapsed = time.perf_counter() - t0
     print(f"[DONE]  Ingestion finished in {elapsed:.1f}s")

@@ -1,5 +1,5 @@
 """
-Shared LanceDB / Pydantic schema for the CPV-code vector store.
+Shared LanceDB / PyArrow schema for the CPV-code vector store.
 
 Both ``ingest.py`` (write path) and ``main.py`` (read path) import this
 single source of truth so the table layout can never drift between the two.
@@ -7,27 +7,16 @@ single source of truth so the table layout can never drift between the two.
 
 from __future__ import annotations
 
-from lancedb.pydantic import LanceModel, Vector
+import pyarrow as pa
 
-
-EMBEDDING_DIM: int = 384
+EMBEDDING_DIM: int = 1024
 TABLE_NAME: str = "cpv_codes"
-MODEL_NAME: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_NAME: str = "sdadas/mmlw-retrieval-roberta-large"
 
-
-class CPVRecord(LanceModel):
-    """One row in the ``cpv_codes`` LanceDB table.
-
-    Attributes
-    ----------
-    vector : Vector(384)
-        Dense embedding produced by *paraphrase-multilingual-MiniLM-L12-v2*.
-    cpv_code : str
-        Official CPV code, e.g. ``"45000000-7"``.
-    description : str
-        Human-readable description in the original language (Polish).
-    """
-
-    vector: Vector(EMBEDDING_DIM)  # type: ignore[valid-type]
-    cpv_code: str
-    description: str
+CPV_SCHEMA: pa.Schema = pa.schema(
+    [
+        pa.field("vector", pa.list_(pa.float32(), EMBEDDING_DIM)),
+        pa.field("cpv_code", pa.utf8()),
+        pa.field("description", pa.utf8()),
+    ]
+)

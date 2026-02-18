@@ -27,6 +27,7 @@ from typing import AsyncIterator
 
 import lancedb
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
 
@@ -39,6 +40,8 @@ DB_PATH: str = "./lancedb"
 DEFAULT_LIMIT: int = 10
 MAX_LIMIT: int = 50
 THREAD_POOL_WORKERS: int = 4  # threads for blocking model.encode()
+RRF_K: int = 60  # constant for Reciprocal Rank Fusion
+FETCH_MULTIPLIER: int = 3  # over-fetch factor for hybrid merging
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -53,7 +56,7 @@ class CPVMatch(BaseModel):
     description: str = Field(..., examples=["Construction work"])
     score: float = Field(
         ...,
-        description="Cosine similarity (higher = better match)",
+        description="Relevance score (higher = better match, normalised 0-1)",
         examples=[0.82],
     )
 
@@ -70,6 +73,7 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     table_rows: int
     model_name: str
+    search_mode: str = "hybrid"
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +84,7 @@ class AppState:
     model: SentenceTransformer
     table: lancedb.table.Table  # type: ignore[name-defined]
     executor: ThreadPoolExecutor
+    fts_available: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -101,17 +106,28 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         thread_name_prefix="embed",
     )
 
+    # Build / refresh FTS index so hybrid search works out of the box.
+    fts_ok = False
+    try:
+        table.create_fts_index("description", replace=True)
+        fts_ok = True
+        logger.info("FTS index ready on 'description' column.")
+    except Exception as exc:
+        logger.warning("Could not create FTS index (vector-only mode): %s", exc)
+
     # Store on app so route handlers can access it.
     _app.state.resources = AppState(
         model=model,
         table=table,
         executor=executor,
+        fts_available=fts_ok,
     )
 
     logger.info(
-        "Ready — %s rows in table, model dim=%s",
+        "Ready — %s rows, dim=%s, search=%s",
         table.count_rows(),
         model.get_sentence_embedding_dimension(),
+        "hybrid (vector+FTS)" if fts_ok else "vector-only",
     )
 
     yield  # -------- app is serving --------
@@ -130,11 +146,80 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ---------------------------------------------------------------------------
+# CORS — allow the Vite dev server (and any localhost origin) to call us
+# ---------------------------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 def _encode_query(state: AppState, text: str) -> list[float]:
     """Blocking call — always run in executor."""
     vec = state.model.encode(text, normalize_embeddings=True)
     return vec.tolist()
+
+
+# ---------------------------------------------------------------------------
+# Hybrid search helpers
+# ---------------------------------------------------------------------------
+def _vector_only(
+    results,  # pyarrow.Table
+    limit: int,
+) -> list[CPVMatch]:
+    """Extract matches from a pure vector search result."""
+    return [
+        CPVMatch(
+            cpv_code=results.column("cpv_code")[i].as_py(),
+            description=results.column("description")[i].as_py(),
+            score=round(1 - results.column("_distance")[i].as_py(), 4),
+        )
+        for i in range(min(results.num_rows, limit))
+    ]
+
+
+def _rrf_merge(
+    vec_results,   # pyarrow.Table — sorted by ascending _distance
+    fts_results,   # pyarrow.Table — sorted by descending BM25 _score
+    limit: int,
+) -> list[CPVMatch]:
+    """Reciprocal Rank Fusion: combine vector + FTS rankings."""
+    scores: dict[str, float] = {}
+    meta: dict[str, str] = {}  # cpv_code → description
+
+    for rank in range(vec_results.num_rows):
+        code = vec_results.column("cpv_code")[rank].as_py()
+        meta.setdefault(code, vec_results.column("description")[rank].as_py())
+        scores[code] = scores.get(code, 0.0) + 1.0 / (RRF_K + rank + 1)
+
+    for rank in range(fts_results.num_rows):
+        code = fts_results.column("cpv_code")[rank].as_py()
+        meta.setdefault(code, fts_results.column("description")[rank].as_py())
+        scores[code] = scores.get(code, 0.0) + 1.0 / (RRF_K + rank + 1)
+
+    ranked = sorted(scores, key=lambda c: scores[c], reverse=True)[:limit]
+
+    if not ranked:
+        return []
+
+    max_score = scores[ranked[0]]
+    return [
+        CPVMatch(
+            cpv_code=code,
+            description=meta[code],
+            score=round(scores[code] / max_score, 4),
+        )
+        for code in ranked
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +229,7 @@ def _encode_query(state: AppState, text: str) -> list[float]:
     "/search",
     response_model=SearchResponse,
     summary="Semantic CPV search",
-    description="Returns the top-K CPV codes most similar to the query.",
+    description="Hybrid search (vector + full-text) over CPV codes with RRF ranking.",
 )
 async def search(
     q: str = Query(..., min_length=1, max_length=512, description="Search phrase (PL or EN)"),
@@ -153,31 +238,39 @@ async def search(
     state: AppState = app.state.resources
     loop = asyncio.get_running_loop()
 
-    # Run blocking encode in a thread so we don't stall the event loop.
+    fetch_limit = min(limit * FETCH_MULTIPLIER, MAX_LIMIT * FETCH_MULTIPLIER)
+
+    # 1. Vector search (always)
     query_vec: list[float] = await loop.run_in_executor(
         state.executor,
         _encode_query,
         state,
         q,
     )
-
-    # LanceDB search (also CPU-bound but very fast on ~9k rows).
-    # Use .to_arrow() instead of .to_pandas() — zero extra dependencies.
-    results = (
+    vec_results = (
         state.table.search(query_vec)
         .metric("cosine")
-        .limit(limit)
+        .limit(fetch_limit)
         .to_arrow()
     )
 
-    matches: list[CPVMatch] = [
-        CPVMatch(
-            cpv_code=results.column("cpv_code")[i].as_py(),
-            description=results.column("description")[i].as_py(),
-            score=round(1 - results.column("_distance")[i].as_py(), 4),
-        )
-        for i in range(results.num_rows)
-    ]
+    # 2. FTS search (if available)
+    fts_results = None
+    if state.fts_available:
+        try:
+            fts_results = (
+                state.table.search(q, query_type="fts")
+                .limit(fetch_limit)
+                .to_arrow()
+            )
+        except Exception as exc:
+            logger.debug("FTS search failed for query '%s': %s", q, exc)
+
+    # 3. Merge with RRF or fall back to vector-only
+    if fts_results is not None and fts_results.num_rows > 0:
+        matches = _rrf_merge(vec_results, fts_results, limit)
+    else:
+        matches = _vector_only(vec_results, limit)
 
     return SearchResponse(query=q, count=len(matches), results=matches)
 
@@ -188,4 +281,5 @@ async def health() -> HealthResponse:
     return HealthResponse(
         table_rows=state.table.count_rows(),
         model_name=MODEL_NAME,
+        search_mode="hybrid (vector+FTS)" if state.fts_available else "vector-only",
     )
