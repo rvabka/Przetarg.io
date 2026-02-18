@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pyarrow as pa
 
-EMBEDDING_DIM: int = 1024
+EMBEDDING_DIM: int = 768
 TABLE_NAME: str = "cpv_codes"
-MODEL_NAME: str = "sdadas/mmlw-retrieval-roberta-large"
+MODEL_NAME: str = "intfloat/multilingual-e5-base"
 
 CPV_SCHEMA: pa.Schema = pa.schema(
     [
