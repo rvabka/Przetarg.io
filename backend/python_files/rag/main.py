@@ -12,8 +12,10 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import AsyncIterator
 
+import httpx
 import lancedb
-from fastapi import FastAPI, Query
+from bs4 import BeautifulSoup
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
@@ -44,6 +46,18 @@ class CPVMatch(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
+    count: int
+    results: list[CPVMatch]
+
+
+class URLSearchRequest(BaseModel):
+    url: str = Field(..., examples=["https://example-firma.pl"])
+    limit: int = Field(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT)
+
+
+class URLSearchResponse(BaseModel):
+    url: str
+    extracted_text: str
     count: int
     results: list[CPVMatch]
 
@@ -290,6 +304,193 @@ async def search(
     results = results[:limit]
 
     return SearchResponse(query=q, count=len(results), results=results)
+
+
+# ---------------------------------------------------------------------------
+# Website text extraction
+# ---------------------------------------------------------------------------
+_SCRAPE_TIMEOUT = 15.0  # seconds
+_MAX_BODY_CHARS = 3000  # cap on extracted body text
+
+
+async def _fetch_page(url: str) -> str:
+    """Download the HTML of *url*. Raises HTTPException on failure."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "pl,en;q=0.5",
+    }
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True, timeout=_SCRAPE_TIMEOUT, verify=False,
+        ) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            return resp.text
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Strona zwróciła błąd {exc.response.status_code}: {url}",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Nie udało się pobrać strony: {exc}",
+        )
+
+
+def _extract_text_from_html(html: str) -> str:
+    """Extract meaningful text from HTML for CPV matching.
+
+    Sources (in priority order):
+      1. <meta name="keywords">
+      2. <meta name="description">
+      3. <title>
+      4. <h1> – <h3> headings
+      5. Paragraph / list-item body text (capped)
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    parts: list[str] = []
+
+    # 1. Meta keywords
+    meta_kw = soup.find("meta", attrs={"name": re.compile(r"^keywords$", re.I)})
+    if meta_kw and meta_kw.get("content"):
+        parts.append(meta_kw["content"])
+
+    # 2. Meta description
+    meta_desc = soup.find("meta", attrs={"name": re.compile(r"^description$", re.I)})
+    if meta_desc and meta_desc.get("content"):
+        parts.append(meta_desc["content"])
+
+    # 3. <title>
+    if soup.title and soup.title.string:
+        parts.append(soup.title.string.strip())
+
+    # 4. Headings h1-h3
+    for tag in soup.find_all(re.compile(r"^h[1-3]$", re.I)):
+        txt = tag.get_text(separator=" ", strip=True)
+        if txt:
+            parts.append(txt)
+
+    # 5. Body text from <p>, <li>, <span>, <div> (fallback)
+    body_texts: list[str] = []
+    total = 0
+    for tag in soup.find_all(["p", "li", "td", "span", "div"]):
+        # skip nested tags already captured
+        if tag.find_parent(["p", "li", "td"]):
+            continue
+        txt = tag.get_text(separator=" ", strip=True)
+        if len(txt) < 10:
+            continue
+        body_texts.append(txt)
+        total += len(txt)
+        if total >= _MAX_BODY_CHARS:
+            break
+    if body_texts:
+        parts.append(" ".join(body_texts))
+
+    combined = "\n".join(parts).strip()
+    if not combined:
+        raise HTTPException(
+            status_code=422,
+            detail="Nie udało się wyodrębnić żadnego tekstu ze strony.",
+        )
+    return combined
+
+
+# ---------------------------------------------------------------------------
+# /search-by-url endpoint
+# ---------------------------------------------------------------------------
+@app.post("/search-by-url", response_model=URLSearchResponse)
+async def search_by_url(body: URLSearchRequest) -> URLSearchResponse:
+    """Fetch a website, extract text, and return matching CPV codes."""
+    state: AppState = app.state.resources
+    loop = asyncio.get_running_loop()
+
+    # 1. Fetch & parse the page
+    html = await _fetch_page(body.url)
+    extracted = _extract_text_from_html(html)
+    logger.info(
+        "Extracted %d chars from %s",
+        len(extracted), body.url,
+    )
+
+    # 2. Reuse the existing search logic
+    limit = body.limit
+    fetch_n = limit * FETCH_MULTIPLIER
+    vec_query, fts_query = _prepare_query(extracted)
+
+    query_vec: list[float] = await loop.run_in_executor(
+        state.executor, _encode_query, state, vec_query,
+    )
+    query_np = np.array(query_vec, dtype=np.float32)
+
+    vec_results = (
+        state.table.search(query_vec)
+        .metric("cosine")
+        .limit(fetch_n)
+        .to_arrow()
+    )
+
+    fts_results = None
+    if state.fts_available:
+        try:
+            fts_results = (
+                state.table.search(fts_query, query_type="fts")
+                .limit(fetch_n)
+                .to_arrow()
+            )
+        except Exception as exc:
+            logger.debug("FTS failed for URL query: %s", exc)
+
+    candidates: dict[str, dict] = {}
+    fts_codes: set[str] = set()
+
+    for i in range(vec_results.num_rows):
+        code = vec_results.column("cpv_code")[i].as_py()
+        if code not in candidates:
+            candidates[code] = {
+                "description": vec_results.column("description")[i].as_py(),
+                "vector": vec_results.column("vector")[i].as_py(),
+            }
+
+    if fts_results is not None:
+        for i in range(fts_results.num_rows):
+            code = fts_results.column("cpv_code")[i].as_py()
+            fts_codes.add(code)
+            if code not in candidates:
+                candidates[code] = {
+                    "description": fts_results.column("description")[i].as_py(),
+                    "vector": fts_results.column("vector")[i].as_py(),
+                }
+
+    FTS_BONUS = 0.1
+    results: list[CPVMatch] = []
+    for code, data in candidates.items():
+        doc_np = np.array(data["vector"], dtype=np.float32)
+        sim = _cosine_sim(query_np, doc_np)
+        final_score = sim + FTS_BONUS if code in fts_codes else sim
+        if sim >= MIN_SIMILARITY:
+            results.append(
+                CPVMatch(
+                    cpv_code=code,
+                    description=data["description"],
+                    score=round(min(final_score, 1.0), 4),
+                )
+            )
+
+    results.sort(key=lambda m: m.score, reverse=True)
+    results = results[:limit]
+
+    return URLSearchResponse(
+        url=body.url,
+        extracted_text=extracted[:500],  # preview only
+        count=len(results),
+        results=results,
+    )
 
 
 @app.get("/health", response_model=HealthResponse)
