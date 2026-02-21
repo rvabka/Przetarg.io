@@ -1,0 +1,13 @@
+setup.py
+models/__init__.py
+models/attachment.py
+models/base.py
+models/chunk.py
+models/enums.py
+models/notice.py
+models/tender.py
+przetargio_shared.egg-info/PKG-INFO
+przetargio_shared.egg-info/SOURCES.txt
+przetargio_shared.egg-info/dependency_links.txt
+przetargio_shared.egg-info/requires.txt
+przetargio_shared.egg-info/top_level.txt
