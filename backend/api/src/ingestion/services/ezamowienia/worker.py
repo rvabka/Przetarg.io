@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from src.ingestion.base import BaseIngestionWorker
 from src.ingestion.services.ezamowienia.client import EzamowieniaClient
 from src.ingestion.services.ezamowienia.client import EzamowieniaClient
-from src.ingestion.services.ezamowienia.section_parser import parse_html_sections, chunk_section_content
+from src.ingestion.services.ezamowienia.section_parser import parse_html_sections
 from src.ingestion.services.embedding_service import EmbeddingService
+from src.ingestion.services.llm_service import LLMService
 from src.db.session import SessionLocal
 from src.db.models import Tender, Notice, Attachment, NoticeChunk
 from src.db.models.enums import NoticeSourceType
@@ -150,75 +151,49 @@ class EzamowieniaWorker(BaseIngestionWorker):
         else:
              logger.info(f"Notice {notice_external_id} already exists.")
 
-        # 3a. Process Chunks and Embeddings (if new notice)
+        # 3a. Process Summary and Embedding (if new notice)
         if not existing_notice and sections:
             try:
-                embedding_service = EmbeddingService()
-                chunks_to_add = []
-                
-                # Iterate over sections and chunk them
-                # We can batch embedding generation for efficiency
-                all_texts = []
-                temp_chunks_data = []
-
-                for section in sections:
-                    if not isinstance(section, dict):
-                         continue
-                         
-                    section_title = section.get("section_title")
-                    content = section.get("content")
-                    if not content:
-                        continue
-                        
-                    sub_chunks = chunk_section_content(content)
-                    for sc in sub_chunks:
-                        sub_id = sc.get("sub_id")
-                        chunk_text = sc.get("content")
-                        
-                        # Filter out common boilerplate negated sentences
-                        # e.g. ") Zamawiający przewiduje udzielenie dotychczasowemu wykonawcy zamówień na podobne usługi lub roboty budowlane: Nie"
-                        if "przewiduje udzielenie" in chunk_text and ": Nie" in chunk_text:
-                            logger.info(f"Skipping boilerplate chunk: {chunk_text[:50]}...")
-                            continue
-
-                        # Prepare for embedding
-                        # Prepend Tender Title and Section Title for better context
-                        # e.g. "Przebudowa drogi... - SEKCJA IV: ... content ..."
-                        # Clean up chunk text (remove leading ") " or similar)
-                        clean_chunk_text = chunk_text.lstrip(") .")
-                        full_text_for_embedding = f"Przetarg: {tender.title}\nSekcja: {section_title}\nTreść: {clean_chunk_text}"
-                        
-                        all_texts.append(full_text_for_embedding)
-                        temp_chunks_data.append({
-                            "notice_pk": notice.id, # Use internal ID
-                            "sub_id": sub_id,
-                            "section_title": section_title,
-                            "content": clean_chunk_text
-                        })
-
-                if all_texts:
-                    logger.info(f"Generating embeddings for {len(all_texts)} chunks...")
-                    # Generate embeddings (now non-blocking)
-                    embeddings = await embedding_service.generate_embeddings(all_texts)
-                    
-                    for i, data in enumerate(temp_chunks_data):
-                        if i < len(embeddings):
-                            chunk_obj = NoticeChunk(
-                                notice_id=data["notice_pk"],
-                                sub_id=data["sub_id"],
-                                section_title=data["section_title"],
-                                content=data["content"], # We store the original or cleaned? Let's store cleaned for display.
-                                embedding=embeddings[i]
-                            )
-                            chunks_to_add.append(chunk_obj)
+                full_text_parts = []
+                for s in sections:
+                    if isinstance(s, dict):
+                        title = s.get("section_title", "")
+                        content = s.get("content", "")
+                        if title and content:
+                            full_text_parts.append(f"--- {title} ---\n{content}\n")
                             
-                    if chunks_to_add:
-                        db.add_all(chunks_to_add)
-                        db.commit()
-                        logger.info(f"Saved {len(chunks_to_add)} chunks with embeddings for notice {notice_external_id}")
-
+                combined_text = "\n".join(full_text_parts)
+                
+                if combined_text:
+                    if len(combined_text) > 30000:
+                        combined_text = combined_text[:30000] + "... (urwane z powodu długości)"
+                    
+                    llm_service = LLMService()
+                    logger.info(f"Generating semantic summary for Notice {notice_external_id}...")
+                    summary = await llm_service.generate_summary(combined_text)
+                    
+                    if summary:
+                        logger.info(f"Generated semantic summary for Notice {notice_external_id}")
+                        embedding_service = EmbeddingService()
+                        
+                        full_embedding_text = f"Przetarg: {tender.title}\nPodsumowanie: {summary}"
+                        
+                        logger.info("Generating embedding for the summary...")
+                        embeddings = await embedding_service.generate_embeddings([full_embedding_text])
+                        
+                        if embeddings and len(embeddings) > 0 and embeddings[0]:
+                            chunk_obj = NoticeChunk(
+                                notice_id=notice.id,
+                                sub_id="SUMMARY",
+                                section_title="Semantic Summary",
+                                content=summary, 
+                                embedding=embeddings[0]
+                            )
+                            db.add(chunk_obj)
+                            db.commit()
+                            logger.info(f"Saved summary and embedding for notice {notice_external_id}")
             except Exception as e:
-                logger.error(f"Error generating embeddings for notice {notice_external_id}: {e}", exc_info=True)
+                logger.error(f"Error processing embeddings for notice {notice_external_id}: {e}", exc_info=True)
 
 
         # 4. Fetch Documents and Update Status (Only if we just created the tender or if explicitly needed)

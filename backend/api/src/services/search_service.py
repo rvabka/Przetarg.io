@@ -64,11 +64,11 @@ class SearchService:
             chunk = row[0]
             distance = row[1]
             
-            # Calculate match percentage (0-100%)
-            # Cosine distance: 0 = identical, 1 = orthogonal, 2 = opposite
-            # We assume relevant range is mostly 0 to 1.
-            # Similarity = 1 - distance
-            similarity = max(0, 1 - distance)
+            # Cosine distance w modelach wektorowych jest "zawalona" i naturalnie nawet niepowiązane
+            # teksty mają odległość wokół 0.5-0.7. Dystans 0.2 to już niemal perfekcyjne dopasowanie.
+            # Użycie potęgi 2.0 pozwala wepchnąć "bliskie" dopasowania (np. dystans rzędu 0.3) 
+            # na półkę 90%+ (ponieważ 1 - 0.3^2 = 1 - 0.09 = 0.91), podczas gdy słabe wciąż mocno spadają.
+            similarity = max(0.0, 1.0 - (distance ** 2.0))
             match_percentage = int(similarity * 100)
             
             if not chunk.notice:
@@ -184,8 +184,8 @@ class SearchService:
                 item["score"] = score
                 item["smart_reason"] = reason
                 
-                # Filter out pure garbage (e.g. < 10)
-                if score >= 10:
+                # Filter out pure garbage and unhelpful matches (e.g. < 40)
+                if score >= 40:
                     smart_results.append(item)
                     
             except Exception as e:
