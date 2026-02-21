@@ -1,17 +1,56 @@
 services:
-  postgres:
-    image: postgres:16
+  db:
+    image: pgvector/pgvector:pg15
     container_name: postgres_db
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: haslo123
-      POSTGRES_DB: moja_baza
+      POSTGRES_USER: przetargi_user
+      POSTGRES_PASSWORD: przetargi_password
+      POSTGRES_DB: przetargi_db
     ports:
       - "5432:5432"
     volumes:
-      -  postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U przetargi_user -d przetargi_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Usługa do inicjalizacji bazy danych (Migracje + Seed)
+  db-setup:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://przetargi_user:przetargi_password@db:5432/przetargi_db
+    volumes:
+      - ./db:/app/db
+      - ./shared:/app/shared
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "cd db && 
+             alembic upgrade head && 
+             python seed.py"
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: przetargi_api
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://przetargi_user:przetargi_password@db:5432/przetargi_db
+      - ENVIRONMENT=LOCAL
+      - SUPABASE_URL=
+      - SUPABASE_ANON_KEY=
+    ports:
+      - "8081:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      db-setup:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
-  pgadmin_data:

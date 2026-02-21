@@ -57,3 +57,13 @@ class Tender(Base):
 
     def __repr__(self) -> str:
         return f"<Tender(id={self.id}, source={self.source}, external_id={self.external_id})>"
+
+    @classmethod
+    def seed(cls, db, count: int = 5):
+        from shared.factories import ModelFactory
+        print(f"Seeding {count} tenders...")
+        for i in range(count):
+            tender = ModelFactory.create_fake_tender(i)
+            db.add(tender)
+        db.commit()
+        print("Tenders seeded.")

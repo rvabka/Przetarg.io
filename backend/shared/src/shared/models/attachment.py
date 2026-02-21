@@ -42,3 +42,12 @@ class Attachment(Base):
 
     def __repr__(self) -> str:
         return f"<Attachment(id={self.id}, filename={self.filename})>"
+
+    @classmethod
+    def seed(cls, db, tender_id: int, count: int = 1):
+        from shared.factories import ModelFactory
+        print(f"Seeding {count} attachments for tender {tender_id}...")
+        for i in range(count):
+            attachment = ModelFactory.create_fake_attachment(tender_id, i)
+            db.add(attachment)
+        db.commit()

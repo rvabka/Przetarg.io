@@ -51,3 +51,12 @@ class Notice(Base):
 
     def __repr__(self) -> str:
         return f"<Notice(id={self.id}, source={self.source}, notice_id={self.notice_id})>"
+
+    @classmethod
+    def seed(cls, db, tender_id: int, count: int = 1):
+        from shared.factories import ModelFactory
+        print(f"Seeding {count} notices for tender {tender_id}...")
+        for i in range(count):
+            notice = ModelFactory.create_fake_notice(tender_id, i)
+            db.add(notice)
+        db.commit()

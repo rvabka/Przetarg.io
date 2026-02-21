@@ -4,20 +4,19 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from sqlalchemy.orm import Session
-from src.ingestion.base import BaseIngestionWorker
-from src.ingestion.services.ezamowienia.client import EzamowieniaClient
-from src.ingestion.services.ezamowienia.client import EzamowieniaClient
-from src.ingestion.services.ezamowienia.section_parser import parse_html_sections
-from src.ingestion.services.embedding_service import EmbeddingService
-from src.ingestion.services.llm_service import LLMService
-from src.db.session import SessionLocal
-from src.db.models import Tender, Notice, Attachment, NoticeChunk
-from src.db.models.enums import NoticeSourceType
+# from services.ingestion.base import BaseIngestionWorker # Not found
+from services.ingestion.ezamowienia.src.client import EzamowieniaClient
+from services.ingestion.ezamowienia.src.section_parser import parse_html_sections
+# from services.ai.embedding_service import EmbeddingService
+# from services.ai.llm_service import LLMService
+from shared.database import SessionLocal
+from shared.models import Tender, Notice, Attachment, NoticeChunk
+from shared.models.enums import NoticeSourceType
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-class EzamowieniaWorker(BaseIngestionWorker):
+class EzamowieniaWorker:
     def __init__(self):
         self.client = EzamowieniaClient()
 
@@ -151,49 +150,6 @@ class EzamowieniaWorker(BaseIngestionWorker):
         else:
              logger.info(f"Notice {notice_external_id} already exists.")
 
-        # 3a. Process Summary and Embedding (if new notice)
-        if not existing_notice and sections:
-            try:
-                full_text_parts = []
-                for s in sections:
-                    if isinstance(s, dict):
-                        title = s.get("section_title", "")
-                        content = s.get("content", "")
-                        if title and content:
-                            full_text_parts.append(f"--- {title} ---\n{content}\n")
-                            
-                combined_text = "\n".join(full_text_parts)
-                
-                if combined_text:
-                    if len(combined_text) > 30000:
-                        combined_text = combined_text[:30000] + "... (urwane z powodu długości)"
-                    
-                    llm_service = LLMService()
-                    logger.info(f"Generating semantic summary for Notice {notice_external_id}...")
-                    summary = await llm_service.generate_summary(combined_text)
-                    
-                    if summary:
-                        logger.info(f"Generated semantic summary for Notice {notice_external_id}")
-                        embedding_service = EmbeddingService()
-                        
-                        full_embedding_text = f"Przetarg: {tender.title}\nPodsumowanie: {summary}"
-                        
-                        logger.info("Generating embedding for the summary...")
-                        embeddings = await embedding_service.generate_embeddings([full_embedding_text])
-                        
-                        if embeddings and len(embeddings) > 0 and embeddings[0]:
-                            chunk_obj = NoticeChunk(
-                                notice_id=notice.id,
-                                sub_id="SUMMARY",
-                                section_title="Semantic Summary",
-                                content=summary, 
-                                embedding=embeddings[0]
-                            )
-                            db.add(chunk_obj)
-                            db.commit()
-                            logger.info(f"Saved summary and embedding for notice {notice_external_id}")
-            except Exception as e:
-                logger.error(f"Error processing embeddings for notice {notice_external_id}: {e}", exc_info=True)
 
 
         # 4. Fetch Documents and Update Status (Only if we just created the tender or if explicitly needed)

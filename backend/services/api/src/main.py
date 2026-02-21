@@ -23,14 +23,33 @@ from shared.models import Tender, Notice, Attachment
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None)
 
-import os
+from fastapi.openapi.docs import get_swagger_ui_html
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html(request: Request):
+    # W Dockerze, jeśli dostęp jest przez port-forwarding/mapowanie localhost:8081,
+    # klientem dla kontenera jest brama sieci dockerowej (zwykle 172.x.x.x).
+    # Jednak standardowo sprawdzamy '127.0.0.1' lub 'localhost'.
+    # Dla bezpieczeństwa sprawdzamy też nagłówek host.
+    client_host = request.client.host
+    host_header = request.headers.get("host", "")
+    
+    is_localhost = client_host in ("127.0.0.1", "localhost", "::1")
+    is_local_docker = "localhost" in host_header or "127.0.0.1" in host_header
+    
+    if not (is_localhost or is_local_docker):
+        raise HTTPException(status_code=403, detail="Swagger UI is only accessible from localhost")
+        
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+    )
 
 @app.get("/config")
 def get_config():
     return {"environment": os.environ.get("ENVIRONMENT", "PRODUCTION")}
-
 
 from supabase import create_client
 
@@ -55,7 +74,20 @@ def get_supabase_client():
 def verify_supabase_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     env = os.environ.get("ENVIRONMENT", "PRODUCTION")
     if env == "LOCAL":
-        return MockUser()
+        user = MockUser()
+        if credentials:
+            # W trybie LOCAL nie walidujemy podpisu, ale dekodujemy dane żeby "mieć info"
+            try:
+                payload = jwt.decode(credentials.credentials, options={"verify_signature": False})
+                user.token_info = {
+                    "payload": payload,
+                    "status": "provided_skipped_verification"
+                }
+            except Exception as e:
+                user.token_info = {"error": f"Błędny format JWT: {str(e)}"}
+        else:
+            user.token_info = {"status": "none"}
+        return user
         
     if not credentials:
         raise HTTPException(status_code=401, detail="Brak autoryzacji (Missing Authentication Token)")
@@ -75,6 +107,27 @@ def verify_supabase_token(credentials: HTTPAuthorizationCredentials = Depends(se
     except Exception as e:
         logger.error(f"Autoryzacja odrzucona przez instancję Supabase: {e}")
         raise HTTPException(status_code=401, detail=f"Invalid or expired token: {e}")
+
+@app.get("/auth/check")
+def check_auth(user: any = Depends(verify_supabase_token)):
+    """
+    Sprawdza ważność tokenu Supabase i zwraca dane użytkownika.
+    W środowisku LOCAL zwraca dane MockUser wraz z info o ewentualnie podanym tokenie.
+    """
+    response = {
+        "status": "authenticated",
+        "user": {
+            "id": getattr(user, "id", None),
+            "email": getattr(user, "email", None),
+        },
+        "environment": os.environ.get("ENVIRONMENT", "PRODUCTION")
+    }
+    
+    # Jeśli mamy dodatkowe info o tokenie (np. z LOCAL dev), dołączamy je
+    if hasattr(user, "token_info"):
+        response["token_debug"] = user.token_info
+        
+    return response
 
 # --- ENDPOINTY ---
 
@@ -109,6 +162,12 @@ def stats():
         "notices": total_notices,
         "documents": total_documents,
     }
+
+@app.get("/tenders/{tender_id}/documents")
+def get_tender_documents(tender_id: str):
+    with SessionLocal() as db:
+        documents = db.query(Attachment).filter(Attachment.tender_id == tender_id).all()
+        return documents
 
 
 # @app.get("/search")
